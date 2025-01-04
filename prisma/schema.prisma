@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String?  @unique
+  phone     String
+  address   String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  customerId  Int
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  employeeId  Int?
+  employee    Employee?   @relation(fields: [employeeId], references: [id])
+  orderDate   DateTime    @default(now())
+  dueDate     DateTime?
+  status      String      @default("PENDING") // PENDING or PAID
+  totalAmount Int
+  notes       String?
+  orderItems  OrderItem[]
+  orderImages OrderImage[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id])
+  description String
+  quantity    Int
+  price       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  phone     String
+  role      String   @default("EMPLOYEE") // ADMIN or EMPLOYEE
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderImage {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id])
+  image     Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
