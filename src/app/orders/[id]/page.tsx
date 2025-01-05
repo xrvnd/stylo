@@ -20,6 +20,7 @@ import { notFound } from 'next/navigation'
 import DeleteOrderButton from './DeleteOrderButton'
 import UpdateStatusButton from './UpdateStatusButton'
 import Image from 'next/image'
+import { ImageViewer } from '@/components/ui/image-viewer'
 
 export default async function OrderPage({
   params,
@@ -185,21 +186,7 @@ export default async function OrderPage({
               <CardTitle>Order Images</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {order.orderImages.map((image) => (
-                  <div key={image.id} className="relative aspect-square">
-                    <Image
-                      src={`/api/orders/${order.id}/images/${image.id}`}
-                      alt={`Order image ${image.id}`}
-                      fill
-                      style={{
-                        objectFit: 'cover',
-                        borderRadius: '10px',
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
+              <ImageViewer images={order.orderImages} orderId={order.id} />
             </CardContent>
           </Card>
         )}

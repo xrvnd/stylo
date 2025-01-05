@@ -1,17 +1,21 @@
 import { prisma } from '@/lib/db/prisma'
 import { NextResponse } from 'next/server'
 import { orderSchema } from '@/lib/validations/schema'
-import { validateRequest, validateId } from '@/lib/validations/middleware'
+import { validateId } from '@/lib/validations/middleware'
 
-interface Params {
-  params: {
+type RouteParams = {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 // GET /api/orders/[id] - Get specific order
-export async function GET(request: Request, { params }: Params) {
-  const validation = validateId(params.id)
+export async function GET(
+  request: Request,
+  { params }: RouteParams
+) {
+  const { id } = await params
+  const validation = validateId(id)
   if (!validation.success) {
     return validation.error
   }
@@ -46,8 +50,12 @@ export async function GET(request: Request, { params }: Params) {
 }
 
 // PUT /api/orders/[id] - Update order
-export async function PUT(request: Request, { params }: Params) {
-  const validation = validateId(params.id)
+export async function PUT(
+  request: Request,
+  { params }: RouteParams
+) {
+  const { id } = await params
+  const validation = validateId(id)
   if (!validation.success) {
     return validation.error
   }
@@ -58,17 +66,47 @@ export async function PUT(request: Request, { params }: Params) {
     const existingImageIds = JSON.parse(formData.get('imageIds') as string || '[]')
     const newImageFiles = formData.getAll('images') as File[]
 
-    // Validate order data using Zod
-    const orderValidation = orderSchema.safeParse({
-      ...orderData,
-      items: orderData.items,
-      totalAmount: orderData.items.reduce(
-        (sum: number, item: any) => sum + (Number(item.quantity) * Number(item.price)),
-        0
-      )
+    // Get the existing order to preserve some fields
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: validation.id },
+      select: { customerId: true, status: true }
     })
 
+    if (!existingOrder) {
+      return NextResponse.json(
+        { error: 'Order not found' },
+        { status: 404 }
+      )
+    }
+
+    // Calculate total amount from items
+    const totalAmount = orderData.items.reduce(
+      (sum: number, item: any) => sum + (Number(item.quantity) * Number(item.price)),
+      0
+    )
+
+    // Prepare the order data for validation
+    const orderDataForValidation = {
+      customerId: existingOrder.customerId,
+      status: existingOrder.status,
+      employeeId: orderData.employeeId,
+      notes: orderData.notes,
+      dueDate: orderData.dueDate,
+      totalAmount,
+      orderItems: orderData.items.map((item: any) => ({
+        description: item.description,
+        quantity: Number(item.quantity),
+        price: Number(item.price)
+      }))
+    }
+
+    console.log('Data for validation:', orderDataForValidation)
+
+    // Validate order data using Zod
+    const orderValidation = orderSchema.safeParse(orderDataForValidation)
+
     if (!orderValidation.success) {
+      console.error('Validation error:', orderValidation.error.format())
       return NextResponse.json(
         { error: 'Invalid order data', details: orderValidation.error.format() },
         { status: 400 }
@@ -110,7 +148,7 @@ export async function PUT(request: Request, { params }: Params) {
           totalAmount: orderValidation.data.totalAmount,
           orderItems: {
             deleteMany: {},
-            create: orderValidation.data.items
+            create: orderValidation.data.orderItems // Use orderItems from validated data
           }
         },
         include: {
@@ -135,8 +173,12 @@ export async function PUT(request: Request, { params }: Params) {
 }
 
 // DELETE /api/orders/[id] - Delete order
-export async function DELETE(request: Request, { params }: Params) {
-  const validation = validateId(params.id)
+export async function DELETE(
+  request: Request,
+  { params }: RouteParams
+) {
+  const { id } = await params
+  const validation = validateId(id)
   if (!validation.success) {
     return validation.error
   }
@@ -147,7 +189,8 @@ export async function DELETE(request: Request, { params }: Params) {
         id: validation.id
       }
     })
-    return new Response(null, { status: 204 })
+
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to delete order' },
