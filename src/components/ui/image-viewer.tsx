@@ -13,7 +13,7 @@ import Image from 'next/image'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 
 interface ImageViewerProps {
-  images: { id: number }[]
+  images: { id: number; image: Uint8Array }[]
   orderId: number
 }
 
@@ -43,26 +43,17 @@ export function ImageViewer({ images, orderId }: ImageViewerProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [open])
 
+  if (!images.length) {
+    return <div>No images available</div>
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {images.map((image, index) => (
-          <DialogTrigger
-            key={image.id}
-            onClick={() => setCurrentIndex(index)}
-            asChild
-          >
-            <div className="relative aspect-square cursor-pointer hover:opacity-80 transition-opacity">
-              <Image
-                src={`/api/orders/${orderId}/images/${image.id}`}
-                alt={`Order image ${image.id}`}
-                fill
-                className="object-cover rounded-lg"
-              />
-            </div>
-          </DialogTrigger>
-        ))}
-      </div>
+      <DialogTrigger asChild>
+        <Button className="text-sm text-blue-600 hover:text-blue-800">
+          View Images
+        </Button>
+      </DialogTrigger>
 
       <DialogContent className="max-w-4xl w-full h-[80vh] p-0">
         <DialogTitle asChild>
@@ -117,6 +108,25 @@ export function ImageViewer({ images, orderId }: ImageViewerProps) {
           </div>
         </div>
       </DialogContent>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        {images.map((image, index) => (
+          <DialogTrigger
+            key={image.id}
+            onClick={() => setCurrentIndex(index)}
+            asChild
+          >
+            <div className="relative aspect-square cursor-pointer hover:opacity-80 transition-opacity">
+              <Image
+                src={`/api/orders/${orderId}/images/${image.id}`}
+                alt={`Order image ${image.id}`}
+                fill
+                className="object-cover rounded-lg"
+              />
+            </div>
+          </DialogTrigger>
+        ))}
+      </div>
     </Dialog>
   )
 }
