@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { ImageUpload } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
 
 type OrderItem = {
@@ -28,6 +29,12 @@ type OrderItem = {
   description: string
   quantity: number
   price: number
+}
+
+type OrderImage = {
+  id?: number
+  url: string
+  file?: File
 }
 
 type Employee = {
@@ -48,43 +55,44 @@ export default function EditOrderPage({
     employeeId: '',
     notes: '',
     dueDate: '',
-    items: [{ description: '', quantity: 1, price: 0 }] as OrderItem[]
+    items: [{ description: '', quantity: 1, price: 0 }] as OrderItem[],
+    images: [] as OrderImage[]
   })
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchOrder = async () => {
       try {
-        // Fetch order details
-        const orderRes = await fetch(`/api/orders/${id}`)
-        const employeesRes = await fetch('/api/employees')
-        
-        if (orderRes.ok && employeesRes.ok) {
-          const [orderData, employeesData] = await Promise.all([
-            orderRes.json(),
-            employeesRes.json()
-          ])
+        const [orderResponse, employeesResponse] = await Promise.all([
+          fetch(`/api/orders/${id}`),
+          fetch('/api/employees')
+        ])
 
-          setEmployees(employeesData)
-          setFormData({
-            employeeId: orderData.employeeId?.toString() || '',
-            notes: orderData.notes || '',
-            dueDate: orderData.dueDate ? new Date(orderData.dueDate).toISOString().split('T')[0] : '',
-            items: orderData.orderItems.map((item: any) => ({
-              id: item.id,
-              description: item.description,
-              quantity: item.quantity,
-              price: item.price
-            }))
-          })
+        if (!orderResponse.ok || !employeesResponse.ok) {
+          throw new Error('Failed to fetch data')
         }
+
+        const order = await orderResponse.json()
+        const employeesList = await employeesResponse.json()
+
+        setEmployees(employeesList)
+        setFormData({
+          employeeId: order.employeeId?.toString() || '',
+          notes: order.notes || '',
+          dueDate: order.dueDate ? new Date(order.dueDate).toISOString().split('T')[0] : '',
+          items: order.orderItems,
+          images: order.orderImages?.map((img: any) => ({
+            id: img.id,
+            url: `/api/orders/${id}/images/${img.id}`
+          })) || []
+        })
       } catch (error) {
-        console.error('Error fetching data:', error)
+        console.error('Error fetching order:', error)
         toast.error('Error loading order data')
         router.push('/orders')
       }
     }
 
-    fetchData()
+    fetchOrder()
   }, [id, router])
 
   const addItem = () => {
@@ -117,35 +125,59 @@ export default function EditOrderPage({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (formData.items.some(item => !item.description || item.quantity < 1 || item.price < 0)) {
-      toast.error('Please fill in all item details correctly')
+    if (formData.items.some(item => !item.description || item.quantity <= 0 || item.price <= 0)) {
+      toast.error('Please fill in all item details')
       return
     }
 
     try {
       setLoading(true)
+
+      // First, upload any new images
+      const formDataWithImages = new FormData()
+      const newImages = formData.images.filter(img => img.file)
+      
+      // Add existing image IDs to keep
+      const existingImageIds = formData.images
+        .filter(img => img.id)
+        .map(img => img.id)
+      
+      formDataWithImages.append('imageIds', JSON.stringify(existingImageIds))
+      
+      // Add new image files
+      newImages.forEach((img, index) => {
+        if (img.file) {
+          formDataWithImages.append(`images`, img.file)
+        }
+      })
+
+      // Add order data
+      formDataWithImages.append('data', JSON.stringify({
+        employeeId: formData.employeeId ? parseInt(formData.employeeId) : null,
+        notes: formData.notes,
+        dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
+        items: formData.items.map(item => ({
+          description: item.description,
+          quantity: Number(item.quantity),
+          price: Number(item.price)
+        }))
+      }))
+
       const response = await fetch(`/api/orders/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          employeeId: formData.employeeId ? parseInt(formData.employeeId) : null,
-          notes: formData.notes,
-          dueDate: formData.dueDate || null,
-          orderItems: formData.items
-        }),
+        body: formDataWithImages
       })
 
       if (response.ok) {
         toast.success('Order updated successfully')
         router.push(`/orders/${id}`)
       } else {
-        throw new Error('Failed to update order')
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to update order')
       }
     } catch (error) {
       console.error('Error updating order:', error)
-      toast.error('Error updating order')
+      toast.error(error.message || 'Error updating order')
     } finally {
       setLoading(false)
     }
@@ -201,6 +233,14 @@ export default function EditOrderPage({
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Add any notes here..."
                   rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Images</Label>
+                <ImageUpload
+                  images={formData.images}
+                  onImagesChange={(images) => setFormData(prev => ({ ...prev, images }))}
+                  maxFiles={5}
                 />
               </div>
             </CardContent>

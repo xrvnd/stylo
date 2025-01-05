@@ -19,13 +19,13 @@ import { formatDistanceToNow } from 'date-fns'
 import { notFound } from 'next/navigation'
 import { use } from 'react'
 
-export default async function CustomerPage({
+export default function CustomerPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const customer = await getCustomerById(parseInt(id))
+  const customer = use(getCustomerById(parseInt(id)))
 
   if (!customer) {
     notFound()
@@ -34,7 +34,12 @@ export default async function CustomerPage({
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">{customer.name}</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">{customer.name}</h1>
+          {customer.nickname && (
+            <p className="text-sm text-gray-500">Nickname: {customer.nickname}</p>
+          )}
+        </div>
         <div className="space-x-4">
           <Button variant="outline" asChild>
             <Link href={`/customers/${customer.id}/edit`}>Edit Customer</Link>
@@ -52,6 +57,15 @@ export default async function CustomerPage({
           </CardHeader>
           <CardContent>
             <dl className="space-y-2">
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Name</dt>
+                <dd className="mt-1">
+                  {customer.name}
+                  {customer.nickname && (
+                    <span className="ml-2 text-gray-500">({customer.nickname})</span>
+                  )}
+                </dd>
+              </div>
               <div>
                 <dt className="text-sm font-medium text-gray-500">Email</dt>
                 <dd className="mt-1">{customer.email || '-'}</dd>

@@ -56,67 +56,83 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/orders - Create new order
+// POST /api/orders - Create order
 export async function POST(request: Request) {
-  // Validate request data
-  const validation = await validateRequest(orderSchema)(request)
-  if (!validation.success) {
-    return validation.error
-  }
-
   try {
-    const { items, images, ...orderData } = validation.data
+    const formData = await request.formData()
+    const orderData = JSON.parse(formData.get('data') as string)
+    const imageFiles = formData.getAll('images') as File[]
 
-    // Create order first
-    const order = await prisma.order.create({
-      data: orderData
+    // Calculate total amount
+    const totalAmount = orderData.orderItems.reduce(
+      (sum: number, item: any) => sum + (Number(item.quantity) * Number(item.price)),
+      0
+    )
+
+    // Convert Date object to ISO string for validation
+    const dueDate = orderData.dueDate ? new Date(orderData.dueDate).toISOString() : null
+
+    // Validate order data using Zod
+    const orderValidation = orderSchema.safeParse({
+      ...orderData,
+      customerId: Number(orderData.customerId),
+      employeeId: orderData.employeeId ? Number(orderData.employeeId) : null,
+      dueDate,
+      totalAmount,
+      status: 'PENDING'
     })
 
-    // Create order items
-    if (items && items.length > 0) {
-      await prisma.orderItem.createMany({
-        data: items.map((item) => ({
-          ...item,
-          orderId: order.id
-        }))
-      })
+    if (!orderValidation.success) {
+      return NextResponse.json(
+        { error: 'Invalid order data', details: orderValidation.error.format() },
+        { status: 400 }
+      )
     }
 
-    // Create order images
-    if (images && images.length > 0) {
-      await prisma.orderImage.createMany({
-        data: images.map((image) => ({
-          image: image,
-          orderId: order.id
-        }))
+    // Start a transaction to handle both order creation and images
+    const newOrder = await prisma.$transaction(async (tx) => {
+      // Create order
+      const order = await tx.order.create({
+        data: {
+          customerId: orderValidation.data.customerId,
+          employeeId: orderValidation.data.employeeId,
+          notes: orderValidation.data.notes,
+          dueDate: orderValidation.data.dueDate ? new Date(orderValidation.data.dueDate) : null,
+          status: orderValidation.data.status,
+          totalAmount: orderValidation.data.totalAmount,
+          orderItems: {
+            create: orderValidation.data.orderItems
+          }
+        },
+        include: {
+          customer: true,
+          employee: true,
+          orderItems: true,
+          orderImages: true
+        }
       })
-    }
 
-    // Fetch the complete order with items and images
-    const completeOrder = await prisma.order.findUnique({
-      where: {
-        id: order.id
+      // Process images
+      if (imageFiles.length > 0) {
+        await Promise.all(
+          imageFiles.map(async (file) => {
+            const buffer = Buffer.from(await file.arrayBuffer())
+            return tx.orderImage.create({
+              data: {
+                orderId: order.id,
+                image: buffer
+              }
+            })
+          })
+        )
       }
+
+      return order
     })
 
-    const orderItems = await prisma.orderItem.findMany({
-      where: {
-        orderId: order.id
-      }
-    })
-
-    const orderImages = await prisma.orderImage.findMany({
-      where: {
-        orderId: order.id
-      }
-    })
-
-    return NextResponse.json({
-      ...completeOrder,
-      items: orderItems,
-      images: orderImages
-    }, { status: 201 })
+    return NextResponse.json(newOrder, { status: 201 })
   } catch (error) {
+    console.error('Error creating order:', error)
     return NextResponse.json(
       { error: 'Failed to create order' },
       { status: 500 }

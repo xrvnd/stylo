@@ -20,12 +20,19 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { ImageUpload } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
 
 type OrderItem = {
   description: string
   quantity: number
   price: number
+}
+
+type OrderImage = {
+  id?: number
+  url: string
+  file?: File
 }
 
 type Customer = {
@@ -43,13 +50,14 @@ export default function NewOrderPage() {
   const [loading, setLoading] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState<string>('')
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('')
-  const [notes, setNotes] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [items, setItems] = useState<OrderItem[]>([
-    { description: '', quantity: 1, price: 0 }
-  ])
+  const [formData, setFormData] = useState({
+    customerId: '',
+    employeeId: '',
+    notes: '',
+    dueDate: '',
+    items: [{ description: '', quantity: 1, price: 0 }] as OrderItem[],
+    images: [] as OrderImage[]
+  })
 
   useEffect(() => {
     // Fetch customers and employees
@@ -78,206 +86,233 @@ export default function NewOrderPage() {
   }, [])
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, price: 0 }])
-  }
-
-  const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
-    const newItems = [...items]
-    newItems[index] = {
-      ...newItems[index],
-      [field]: field === 'description' ? value : Number(value)
-    }
-    setItems(newItems)
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { description: '', quantity: 1, price: 0 }]
+    }))
   }
 
   const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index))
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }))
   }
 
-  const calculateTotal = () => {
-    return items.reduce((total, item) => total + (item.quantity * item.price), 0)
+  const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      )
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!selectedCustomer) {
+
+    if (!formData.customerId) {
       toast.error('Please select a customer')
       return
     }
 
-    if (items.some(item => !item.description || item.quantity < 1 || item.price < 0)) {
-      toast.error('Please fill in all item details correctly')
+    if (formData.items.some(item => !item.description || item.quantity <= 0 || item.price <= 0)) {
+      toast.error('Please fill in all item details')
       return
     }
 
     try {
       setLoading(true)
-      const response = await fetch('/api/orders/create', {
+
+      const formDataWithImages = new FormData()
+      
+      // Add new image files
+      formData.images.forEach((img) => {
+        if (img.file) {
+          formDataWithImages.append('images', img.file)
+        }
+      })
+
+      // Add order data
+      formDataWithImages.append('data', JSON.stringify({
+        customerId: parseInt(formData.customerId),
+        employeeId: formData.employeeId ? parseInt(formData.employeeId) : null,
+        notes: formData.notes || null,
+        dueDate: formData.dueDate || null,
+        orderItems: formData.items.map(item => ({
+          description: item.description,
+          quantity: Number(item.quantity),
+          price: Number(item.price)
+        }))
+      }))
+
+      const response = await fetch('/api/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          customerId: parseInt(selectedCustomer),
-          employeeId: selectedEmployee ? parseInt(selectedEmployee) : null,
-          orderItems: items,
-          notes,
-          dueDate: dueDate || null,
-        }),
+        body: formDataWithImages
       })
 
       if (response.ok) {
         const order = await response.json()
         toast.success('Order created successfully')
-        router.push('/orders')
+        router.push(`/orders/${order.id}`)
       } else {
-        throw new Error('Failed to create order')
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to create order')
       }
     } catch (error) {
       console.error('Error creating order:', error)
-      toast.error('Error creating order')
+      toast.error(error.message || 'Error creating order')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-6">Create New Order</h1>
-        
-        <form onSubmit={handleSubmit}>
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Customer Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customer">Customer</Label>
-                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id.toString()}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employee">Employee</Label>
-                  <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={employee.id.toString()}>
-                          {employee.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">New Order</h1>
+      </div>
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Order Items</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {items.map((item, index) => (
-                <div key={index} className="grid grid-cols-12 gap-4 items-end">
-                  <div className="col-span-6">
-                    <Label htmlFor={`item-${index}-desc`}>Description</Label>
-                    <Input
-                      id={`item-${index}-desc`}
-                      value={item.description}
-                      onChange={(e) => updateItem(index, 'description', e.target.value)}
-                      placeholder="Item description"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor={`item-${index}-qty`}>Quantity</Label>
-                    <Input
-                      id={`item-${index}-qty`}
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor={`item-${index}-price`}>Price</Label>
-                    <Input
-                      id={`item-${index}-price`}
-                      type="number"
-                      min="0"
-                      value={item.price}
-                      onChange={(e) => updateItem(index, 'price', e.target.value)}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => removeItem(index)}
-                      className="w-full"
-                      disabled={items.length === 1}
-                    >
-                      Remove
-                    </Button>
-                  </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Order Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="customerId">Customer</Label>
+              <Select
+                value={formData.customerId}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, customerId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id.toString()}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="employeeId">Employee</Label>
+              <Select
+                value={formData.employeeId}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, employeeId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.id.toString()}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dueDate">Due Date</Label>
+              <Input
+                type="date"
+                id="dueDate"
+                value={formData.dueDate}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, dueDate: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Images</Label>
+              <ImageUpload
+                images={formData.images}
+                onImagesChange={(images) => setFormData(prev => ({ ...prev, images }))}
+                maxFiles={5}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Order Items</CardTitle>
+            <Button type="button" onClick={addItem}>
+              Add Item
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {formData.items.map((item, index) => (
+              <div key={index} className="flex gap-4 items-end">
+                <div className="flex-1 space-y-2">
+                  <Label>Description</Label>
+                  <Input
+                    value={item.description}
+                    onChange={(e) =>
+                      updateItem(index, 'description', e.target.value)
+                    }
+                    placeholder="Item description"
+                  />
                 </div>
-              ))}
-              <Button type="button" variant="outline" onClick={addItem}>
-                Add Item
-              </Button>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <div className="text-lg font-semibold">
-                Total: ₹{calculateTotal()}
+                <div className="w-24 space-y-2">
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    value={item.quantity}
+                    onChange={(e) =>
+                      updateItem(index, 'quantity', parseInt(e.target.value))
+                    }
+                    min={1}
+                  />
+                </div>
+                <div className="w-32 space-y-2">
+                  <Label>Price</Label>
+                  <Input
+                    type="number"
+                    value={item.price}
+                    onChange={(e) =>
+                      updateItem(index, 'price', parseInt(e.target.value))
+                    }
+                    min={0}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => removeItem(index)}
+                  className="mb-2"
+                >
+                  Remove
+                </Button>
               </div>
-            </CardFooter>
-          </Card>
-
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Additional Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add any additional notes here..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
-                <Input
-                  id="dueDate"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end space-x-4">
-            <Button 
-              variant="outline" 
-              type="button" 
+            ))}
+          </CardContent>
+          <CardFooter className="flex justify-end space-x-4">
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => router.back()}
               disabled={loading}
             >
@@ -286,9 +321,9 @@ export default function NewOrderPage() {
             <Button type="submit" disabled={loading}>
               {loading ? 'Creating...' : 'Create Order'}
             </Button>
-          </div>
-        </form>
-      </div>
+          </CardFooter>
+        </Card>
+      </form>
     </div>
   )
 }

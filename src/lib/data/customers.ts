@@ -21,24 +21,21 @@ export async function getCustomers() {
   }
 }
 
-export async function getCustomerById(id: number) {
-  try {
-    const customer = await prisma.customer.findUnique({
-      where: { id },
-      include: {
-        orders: {
-          include: {
-            orderItems: true
-          },
-          orderBy: {
-            orderDate: 'desc'
-          }
+export function getCustomerById(id: number) {
+  return prisma.customer.findUnique({
+    where: { id },
+    include: {
+      orders: {
+        include: {
+          orderItems: true
+        },
+        orderBy: {
+          orderDate: 'desc'
         }
       }
-    })
-    return customer
-  } catch (error) {
+    }
+  }).catch(error => {
     console.error('Error fetching customer:', error)
     throw error
-  }
+  })
 }

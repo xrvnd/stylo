@@ -7,6 +7,7 @@ export async function getOrders() {
         customer: true,
         employee: true,
         orderItems: true,
+        orderImages: true
       },
       orderBy: {
         orderDate: 'desc',
@@ -27,6 +28,7 @@ export async function getOrderById(id: number) {
         customer: true,
         employee: true,
         orderItems: true,
+        orderImages: true
       },
     })
     return order
@@ -54,7 +56,7 @@ export async function updateOrder(
   data: {
     employeeId?: number | null
     notes?: string
-    dueDate?: Date | null
+    dueDate?: Date | null | string
     orderItems: {
       id?: number
       description: string
@@ -83,7 +85,7 @@ export async function updateOrder(
         data: {
           employeeId: data.employeeId,
           notes: data.notes,
-          dueDate: data.dueDate,
+          dueDate: data.dueDate ? new Date(data.dueDate) : null,
           totalAmount,
           orderItems: {
             create: data.orderItems.map(item => ({
@@ -97,6 +99,7 @@ export async function updateOrder(
           customer: true,
           employee: true,
           orderItems: true,
+          orderImages: true,
         },
       })
 
