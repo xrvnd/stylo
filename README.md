@@ -31,8 +31,7 @@ npm install
 3. **Environment Setup**
 Create a `.env` file in the root directory with the following variables:
 ```env
-DATABASE_URL="postgresql://username:password@localhost:5432/stylo"
-NEXT_PUBLIC_API_URL="http://localhost:3000/api"
+DATABASE_URL="file:./prisma/dev.db"
 ```
 
 4. **Database Setup**
