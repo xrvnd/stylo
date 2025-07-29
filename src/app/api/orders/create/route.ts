@@ -3,8 +3,26 @@ import { prisma } from '@/lib/db/prisma'
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { customerId, employeeId, orderItems, notes, dueDate } = body
+    const formData = await request.formData();
+    const dataString = formData.get('data');
+    if (typeof dataString !== 'string') {
+      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
+    }
+    const data = JSON.parse(dataString);
+    const { orderId, customerId, employeeId, orderItems, notes, dueDate } = data;
+
+    // Input validation
+    if (
+      typeof orderId !== 'number' ||
+      isNaN(orderId) ||
+      orderId < 1 ||
+      typeof customerId !== 'number' ||
+      isNaN(customerId) ||
+      !Array.isArray(orderItems) ||
+      orderItems.length === 0
+    ) {
+      return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
+    }
 
     // Calculate total amount
     const totalAmount = orderItems.reduce(
@@ -18,6 +36,7 @@ export async function POST(request: Request) {
       // Create the order
       const order = await prisma.order.create({
         data: {
+          orderId, // <-- store orderId
           customerId,
           employeeId,
           totalAmount,
@@ -45,7 +64,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating order:', error)
     return NextResponse.json(
-      { error: 'Error creating order' },
+      { error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }

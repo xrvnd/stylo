@@ -24,6 +24,7 @@ model Customer {
 
 model Order {
   id          Int         @id @default(autoincrement())
+  orderId     Int?        // Required order identifier, not primary key
   customerId  Int
   customer    Customer    @relation(fields: [customerId], references: [id])
   employeeId  Int?
@@ -42,7 +43,7 @@ model Order {
 model OrderItem {
   id          Int      @id @default(autoincrement())
   orderId     Int
-  order       Order    @relation(fields: [orderId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   description String
   quantity    Int
   price       Int
@@ -64,7 +65,7 @@ model Employee {
 model OrderImage {
   id        Int      @id @default(autoincrement())
   orderId   Int
-  order     Order    @relation(fields: [orderId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   image     Bytes
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

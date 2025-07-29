@@ -172,12 +172,20 @@ export default function EditOrderPage({
         toast.success('Order updated successfully')
         router.push(`/orders/${id}`)
       } else {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to update order')
+        const formData = await response.formData();
+        const dataString = formData.get('data');
+        if (typeof dataString !== 'string') {
+          return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
+        }
+        const data = JSON.parse(dataString);
+        throw new Error(data.error || 'Failed to update order');
       }
     } catch (error) {
-      console.error('Error updating order:', error)
-      toast.error(error.message || 'Error updating order')
+      console.error('Error updating order:', error, JSON.stringify(error));
+      return NextResponse.json(
+        { error: String(error) },
+        { status: 500 }
+      );
     } finally {
       setLoading(false)
     }

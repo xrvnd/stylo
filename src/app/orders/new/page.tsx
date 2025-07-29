@@ -51,6 +51,7 @@ export default function NewOrderPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [formData, setFormData] = useState({
+    orderId: '',
     customerId: '',
     employeeId: '',
     notes: '',
@@ -109,61 +110,74 @@ export default function NewOrderPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
+
+    if (!formData.orderId) {
+      toast.error('Please enter an Order ID');
+      return;
+    }
 
     if (!formData.customerId) {
-      toast.error('Please select a customer')
-      return
+      toast.error('Please select a customer');
+      return;
     }
 
     if (formData.items.some(item => !item.description || item.quantity <= 0 || item.price <= 0)) {
-      toast.error('Please fill in all item details')
-      return
+      toast.error('Please fill in all item details, including a positive quantity and price');
+      return;
     }
 
     try {
-      setLoading(true)
+      setLoading(true);
 
-      const formDataWithImages = new FormData()
-      
-      // Add new image files
+      // Create a new FormData object
+      const formDataToSend = new FormData();
+
+      // Append each field individually, matching the backend's expectations
+      formDataToSend.append('orderId', formData.orderId);
+      formDataToSend.append('customerId', formData.customerId);
+
+      if (formData.employeeId) {
+        formDataToSend.append('employeeId', formData.employeeId);
+      }
+      if (formData.notes) {
+        formDataToSend.append('notes', formData.notes);
+      }
+      if (formData.dueDate) {
+        formDataToSend.append('dueDate', formData.dueDate);
+      }
+
+      // Stringify the orderItems array, as the backend expects to parse it
+      formDataToSend.append('orderItems', JSON.stringify(formData.items));
+
+      // Append image files
       formData.images.forEach((img) => {
         if (img.file) {
-          formDataWithImages.append('images', img.file)
+          // The backend expects the field name 'images'
+          formDataToSend.append('images', img.file);
         }
-      })
-
-      // Add order data
-      formDataWithImages.append('data', JSON.stringify({
-        customerId: parseInt(formData.customerId),
-        employeeId: formData.employeeId ? parseInt(formData.employeeId) : null,
-        notes: formData.notes || null,
-        dueDate: formData.dueDate || null,
-        orderItems: formData.items.map(item => ({
-          description: item.description,
-          quantity: Number(item.quantity),
-          price: Number(item.price)
-        }))
-      }))
+      });
 
       const response = await fetch('/api/orders', {
         method: 'POST',
-        body: formDataWithImages
-      })
+        body: formDataToSend, // Send the correctly structured form data
+      });
 
       if (response.ok) {
-        const order = await response.json()
-        toast.success('Order created successfully')
-        router.push(`/orders/${order.id}`)
+        const order = await response.json();
+        toast.success('Order created successfully!');
+        router.push(`/orders/${order.id}`);
       } else {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to create order')
+        const data = await response.json();
+        // Log the detailed error from the backend for easier debugging
+        console.error('API Error:', data);
+        toast.error(data.error || 'Failed to create order');
       }
     } catch (error) {
-      console.error('Error creating order:', error)
-      toast.error(error.message || 'Error creating order')
+      console.error('Error creating order:', error);
+      toast.error('An unexpected error occurred. Please check the console.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -179,6 +193,19 @@ export default function NewOrderPage() {
             <CardTitle>Order Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* OrderId field */}
+            <div className="space-y-2">
+              <Label htmlFor="orderId">Order ID</Label>
+              <Input
+                type="number"
+                id="orderId"
+                value={formData.orderId}
+                onChange={e => setFormData(prev => ({ ...prev, orderId: e.target.value }))}
+                required
+                min={1}
+                placeholder="Enter order number"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="customerId">Customer</Label>
               <Select
@@ -270,9 +297,7 @@ export default function NewOrderPage() {
                   <Label>Description</Label>
                   <Input
                     value={item.description}
-                    onChange={(e) =>
-                      updateItem(index, 'description', e.target.value)
-                    }
+                    onChange={(e) => updateItem(index, 'description', e.target.value)}
                     placeholder="Item description"
                   />
                 </div>
@@ -280,10 +305,8 @@ export default function NewOrderPage() {
                   <Label>Quantity</Label>
                   <Input
                     type="number"
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateItem(index, 'quantity', parseInt(e.target.value))
-                    }
+                    value={item.quantity === undefined ? '' : String(item.quantity)}
+                    onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))}
                     min={1}
                   />
                 </div>
@@ -291,10 +314,8 @@ export default function NewOrderPage() {
                   <Label>Price</Label>
                   <Input
                     type="number"
-                    value={item.price}
-                    onChange={(e) =>
-                      updateItem(index, 'price', parseInt(e.target.value))
-                    }
+                    value={item.price === undefined ? '' : String(item.price)}
+                    onChange={(e) => updateItem(index, 'price', e.target.value === '' ? '' : Number(e.target.value))}
                     min={0}
                   />
                 </div>
