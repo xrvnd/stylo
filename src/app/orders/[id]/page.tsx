@@ -19,14 +19,15 @@ import { formatDistanceToNow } from 'date-fns'
 import { notFound } from 'next/navigation'
 import DeleteOrderButton from './DeleteOrderButton'
 import UpdateStatusButton from './UpdateStatusButton'
-import Image from 'next/image'
 import { ImageViewer } from '@/components/ui/image-viewer'
 
-export default async function OrderPage({
-  params,
-}: {
-  params: { id: string }
-}) {
+type Props = {
+  params: {
+    id: string
+  }
+}
+
+export default async function OrderPage({ params }: Props) {
   const order = await getOrderById(parseInt(params.id))
 
   if (!order) {
@@ -42,7 +43,7 @@ export default async function OrderPage({
             Created {formatDistanceToNow(new Date(order.orderDate), { addSuffix: true })}
           </p>
         </div>
-        
+
         <div className="flex justify-end space-x-4">
           <DeleteOrderButton orderId={order.id} />
           <UpdateStatusButton orderId={order.id} currentStatus={order.status} />
@@ -56,6 +57,7 @@ export default async function OrderPage({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Customer Info */}
         <Card>
           <CardHeader>
             <CardTitle>Customer Information</CardTitle>
@@ -78,6 +80,7 @@ export default async function OrderPage({
           </CardContent>
         </Card>
 
+        {/* Additional Info */}
         <Card>
           <CardHeader>
             <CardTitle>Additional Information</CardTitle>
@@ -106,6 +109,7 @@ export default async function OrderPage({
           </CardContent>
         </Card>
 
+        {/* Order Summary */}
         <Card>
           <CardHeader>
             <CardTitle>Order Details</CardTitle>
@@ -142,6 +146,7 @@ export default async function OrderPage({
           </CardContent>
         </Card>
 
+        {/* Order Items */}
         <Card className="md:col-span-3">
           <CardHeader>
             <CardTitle>Order Items</CardTitle>
@@ -180,7 +185,8 @@ export default async function OrderPage({
           </CardContent>
         </Card>
 
-        {order.orderImages && order.orderImages.length > 0 && (
+        {/* Order Images */}
+        {order.orderImages?.length > 0 && (
           <Card className="md:col-span-3">
             <CardHeader>
               <CardTitle>Order Images</CardTitle>
