@@ -1,72 +1,83 @@
-// src/app/api/orders/route.ts
-
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 
-export async function POST(req: Request) {
+// defining shape of an order item after parsing
+type OrderItem = {
+  description: string;
+  quantity: number;
+  price: number;
+};
+
+export async function POST(request: Request) {
   try {
-    const formData = await req.formData()
+    const formData = await request.formData();
 
-    const orderId = parseInt(formData.get('orderId') as string)
-    const customerId = parseInt(formData.get('customerId') as string)
-    const employeeId = formData.get('employeeId') ? parseInt(formData.get('employeeId') as string) : null
-    const notes = formData.get('notes') as string | null
-    const dueDate = formData.get('dueDate') as string | null
+    // extract and validate data from FormData
+    const orderId = formData.get('orderId') as string;
+    const customerId = formData.get('customerId') as string;
+    const employeeId = formData.get('employeeId') as string | null;
+    const dueDate = formData.get('dueDate') as string | null;
+    const notes = formData.get('notes') as string | null;
+    const advancePaymentStr = formData.get('advancePayment') as string;
+    const orderItemsStr = formData.get('orderItems') as string;
+    const images = formData.getAll('images') as File[];
 
-    const orderItems = JSON.parse(formData.get('orderItems') as string)
-    const imageFiles = formData.getAll('images') as File[]
+    if (!orderId || !customerId || !orderItemsStr) {
+      return NextResponse.json({ error: 'Missing required fields: orderId, customerId, orderItems' }, { status: 400 });
+    }
 
-    const totalAmount = orderItems.reduce(
-      (sum: number, item: any) => sum + item.quantity * item.price,
-      0
+    const orderItems: OrderItem[] = JSON.parse(orderItemsStr);
+    const advanceAmount = parseInt(advancePaymentStr || '0', 10);
+
+    // --- Business Logic ---
+    const totalAmount = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const status = advanceAmount >= totalAmount ? 'PAID' : 'PENDING';
+
+    // prepare image data for Prisma
+    const imageBuffers = await Promise.all(
+      images.map(async (file) => {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        return { image: buffer };
+      })
     );
-
-    const order = await prisma.$transaction(async (tx) => {
-      const newOrder = await tx.order.create({
-        data: {
-          orderId,
-          customerId,
-          employeeId,
-          notes,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          totalAmount,
-          orderItems: {
-            create: orderItems.map((item: any) => ({
-              description: item.description,
-              quantity: item.quantity,
-              price: item.price,
-            })),
-          },
+    
+    // database Transaction
+    const newOrder = await prisma.order.create({
+      data: {
+        orderId: parseInt(orderId, 10),
+        customerId: parseInt(customerId, 10),
+        employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        notes: notes,
+        totalAmount: totalAmount,
+        advanceAmount: advanceAmount,
+        status: status,
+        orderItems: {
+          create: orderItems.map(item => ({
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+          })),
         },
-      });
-
-      if (imageFiles.length > 0) {
-        const imageCreations = imageFiles.map(async (file) => {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          return tx.orderImage.create({
-            data: {
-              orderId: newOrder.id,
-              image: buffer,
-            },
-          });
-        });
-        await Promise.all(imageCreations);
-      }
-
-      return tx.order.findUnique({
-        where: { id: newOrder.id },
-        include: {
-          customer: true,
-          employee: true,
-          orderItems: true,
-          orderImages: true,
+        orderImages: {
+          create: imageBuffers,
         },
-      });
+      },
+      // include related data in the response if needed
+      include: {
+        orderItems: true,
+        orderImages: true,
+      },
     });
 
-    return NextResponse.json(order, { status: 201 });
+    return NextResponse.json(newOrder, { status: 201 });
+
   } catch (error) {
-    console.error('Error in POST /api/orders:', error);
-    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+    console.error('Failed to create order:', error);
+    // handle future JSON parsing errors
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ error: 'Invalid format for order items.' }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'An internal error occurred while creating the order.' }, { status: 500 });
   }
 }

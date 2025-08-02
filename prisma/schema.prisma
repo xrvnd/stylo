@@ -23,21 +23,22 @@ model Customer {
 }
 
 model Order {
-  id          Int         @id @default(autoincrement())
-  orderId     Int?        // Required order identifier, not primary key
-  customerId  Int
-  customer    Customer    @relation(fields: [customerId], references: [id])
-  employeeId  Int?
-  employee    Employee?   @relation(fields: [employeeId], references: [id])
-  orderDate   DateTime    @default(now())
-  dueDate     DateTime?
-  status      String      @default("PENDING") // PENDING or PAID
-  totalAmount Int
-  notes       String?
-  orderItems  OrderItem[]
-  orderImages OrderImage[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            Int         @id @default(autoincrement())
+  orderId       Int?        // Required order identifier, not primary key
+  customerId    Int
+  customer      Customer    @relation(fields: [customerId], references: [id])
+  employeeId    Int?
+  employee      Employee?   @relation(fields: [employeeId], references: [id])
+  orderDate     DateTime    @default(now())
+  dueDate       DateTime?
+  status        String      @default("PENDING") // PENDING or PAID
+  totalAmount   Int
+  advanceAmount Int         @default(0)//advance payment- new feautre for order advance payments for orders
+  notes         String?
+  orderItems    OrderItem[]
+  orderImages   OrderImage[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 model OrderItem {
