@@ -277,7 +277,7 @@ export default function NewOrderPage() {
               <ImageUpload
                 images={formData.images}
                 onImagesChange={(images) => setFormData(prev => ({ ...prev, images }))}
-                maxFiles={5}
+                maxFiles={25}
               />
             </div>
           </CardContent>
