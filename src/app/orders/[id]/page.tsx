@@ -1,48 +1,51 @@
 import { notFound } from 'next/navigation'
-// Assume you have these helper functions and components
 import { getOrderById } from '@/lib/data/orders' 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { OrderDetailActions } from './OrderDetailActions'
 
-// The type definition for your props
 type Props = {
   params: { id: string }
 }
 
-// THE CORRECTED FUNCTION SIGNATURE
+// The page component itself
 export default async function OrderPage(props: Props) {
-  const { params } = props; // Get params from the props object
+  const { params } = props; // get params --> Next.js best practice
   
-  // Now, the rest of your code works perfectly
+  // fetch the specific order by its ID
   const order = await getOrderById(parseInt(params.id))
 
   if (!order) {
     notFound()
   }
 
-  // Helper function to format dates
+  // helper function to format dates nicely
   const formatDate = (date: Date) => 
-    new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(date)
+    new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short' }).format(date)
 
-  // Helper function to format currency
+  // Helper function to format numbers as Indian Rupees
   const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount)
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <div className="flex justify-between items-center">
+      {/* HEADER SECTION WITH TITLE AND ACTION BUTTONS */}
+      <div className="flex justify-between items-start gap-4">
         <div>
           <h1 className="text-3xl font-bold">Order #{order.orderId || order.id}</h1>
           <p className="text-muted-foreground">
             Created: {formatDate(order.createdAt)}
           </p>
         </div>
-        {/* You can add your action buttons here */}
+        
+        {/* action button comp.s here */}
+        <OrderDetailActions order={order} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Customer Information */}
+      {/* MAIN CONTENT GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* customer info Card */}
         <Card>
           <CardHeader><CardTitle>Customer Information</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -52,30 +55,29 @@ export default async function OrderPage(props: Props) {
           </CardContent>
         </Card>
 
-        {/* Additional Information */}
+        {/* additional Information Card */}
         <Card>
           <CardHeader><CardTitle>Additional Information</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p><span className="font-semibold">Employee:</span> {order.employee?.name || 'Unassigned'}</p>
-            <p><span className="font-semibold">Due Date:</span> {order.dueDate ? formatDate(order.dueDate) : 'N/A'}</p>
+            <p><span className="font-semibold">Due Date:</span> {order.dueDate ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(order.dueDate) : 'N/A'}</p>
             <p><span className="font-semibold">Notes:</span> {order.notes || 'None'}</p>
           </CardContent>
         </Card>
         
-        {/* Order Details */}
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="flex justify-between"><span>Status:</span> <Badge>{order.status}</Badge></p>
-            <p className="flex justify-between"><span>Total Amount:</span> <strong>{formatCurrency(order.totalAmount)}</strong></p>
-            <p className="flex justify-between"><span>Advance Paid:</span> <strong>{formatCurrency(order.advanceAmount)}</strong></p>
-            <hr className="my-2" />
-            <p className="flex justify-between text-lg"><span>Remaining Due:</span> <strong className="text-red-600">{formatCurrency(order.totalAmount - order.advanceAmount)}</strong></p>
-          </CardContent>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between items-center"><span>Status:</span> <Badge>{order.status}</Badge></div>
+              <div className="flex justify-between"><span>Total Amount:</span> <strong>{formatCurrency(order.totalAmount)}</strong></div>
+              <div className="flex justify-between"><span>Advance Paid:</span> <strong>{formatCurrency(order.advanceAmount)}</strong></div>
+              <hr className="my-2" />
+              <div className="flex justify-between text-lg"><span>Remaining Due:</span> <strong className="text-red-600">{formatCurrency(order.totalAmount - order.advanceAmount)}</strong></div>
+            </CardContent>
         </Card>
       </div>
 
-      {/* Order Items */}
+      {/* Order Items Table */}
       <Card>
         <CardHeader><CardTitle>Order Items</CardTitle></CardHeader>
         <CardContent>
