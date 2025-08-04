@@ -1,15 +1,8 @@
+// --- EDITED: Removed unused imports for Table components and date-fns, as they are now handled by OrderTable ---
 import { getOrders } from '@/lib/data/orders'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import Link from 'next/link'
-import { formatDistanceToNow } from 'date-fns'
+import { OrderTable } from './OrderTable'
 
 export default async function OrdersPage() {
   const orders = await getOrders()
@@ -23,6 +16,13 @@ export default async function OrdersPage() {
         </Button>
       </div>
 
+      {/* --- EDITED: The static table has been replaced by our new interactive OrderTable component --- */}
+      {/* The OrderTable component now contains all the logic for the search bar, filtering, and rendering the table rows. */}
+      {/* We pass the full list of 'orders' to it, and it handles the rest on the client-side. */}
+      <OrderTable orders={orders} />
+      
+      {/* --- EDITED: The original static table code has been removed from here. --- */}
+      {/* 
       <div className="bg-white rounded-lg shadow">
         <Table>
           <TableHeader>
@@ -72,7 +72,8 @@ export default async function OrdersPage() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </div> 
+      */}
     </div>
   )
 }
