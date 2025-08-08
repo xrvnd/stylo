@@ -1,56 +1,60 @@
 import { prisma } from '@/lib/db/prisma'
 
+// ✅ Get all orders (latest first)
 export async function getOrders() {
   try {
-    const orders = await prisma.order.findMany({
+    return await prisma.order.findMany({
       include: {
         customer: true,
         employee: true,
         orderItems: true,
-        orderImages: true
+        orderImages: true, // images included
       },
       orderBy: {
         orderDate: 'desc',
       },
     })
-    return orders
   } catch (error) {
     console.error('Error fetching orders:', error)
     throw error
   }
 }
 
+// ✅ Get single order by ID
 export async function getOrderById(id: number) {
   try {
-    const order = await prisma.order.findUnique({
+    return await prisma.order.findUnique({
       where: { id },
       include: {
         customer: true,
         employee: true,
         orderItems: true,
-        orderImages: true
+        orderImages: true, // includes image bytes
       },
     })
-    return order
   } catch (error) {
     console.error('Error fetching order:', error)
     throw error
   }
 }
 
-export async function updateOrderStatus(id: number, status: 'PENDING' | 'PAID' | 'CANCELLED') {
+// ✅ Update only order status
+export async function updateOrderStatus(
+  id: number,
+  status: 'PENDING' | 'PAID' | 'CANCELLED'
+) {
   try {
-    const order = await prisma.order.update({
+    return await prisma.order.update({
       where: { id },
       data: { status },
     })
-    return order
   } catch (error) {
     console.error('Error updating order status:', error)
     throw error
   }
 }
 
+// ✅ Update an order & its items
 export async function updateOrder(
   id: number,
   data: {
@@ -63,32 +67,33 @@ export async function updateOrder(
       quantity: number
       price: number
     }[]
+    advanceAmount?: number // ✅ renamed to match schema
   }
 ) {
   try {
-    // Start a transaction
     const order = await prisma.$transaction(async (prisma) => {
-      // If there are existing items, delete them
+      // Remove old items
       await prisma.orderItem.deleteMany({
         where: { orderId: id },
       })
 
-      // Calculate new total amount
+      // Recalculate total
       const totalAmount = data.orderItems.reduce(
-        (sum, item) => sum + (item.quantity * item.price),
+        (sum, item) => sum + item.quantity * item.price,
         0
       )
 
-      // Update the order with new data
-      const updatedOrder = await prisma.order.update({
+      // Update order
+      return await prisma.order.update({
         where: { id },
         data: {
-          employeeId: data.employeeId,
+          employeeId: data.employeeId ?? null,
           notes: data.notes,
           dueDate: data.dueDate ? new Date(data.dueDate) : null,
           totalAmount,
+          advanceAmount: data.advanceAmount ?? 0,
           orderItems: {
-            create: data.orderItems.map(item => ({
+            create: data.orderItems.map((item) => ({
               description: item.description,
               quantity: item.quantity,
               price: item.price,
@@ -102,8 +107,6 @@ export async function updateOrder(
           orderImages: true,
         },
       })
-
-      return updatedOrder
     })
 
     return order
@@ -113,47 +116,44 @@ export async function updateOrder(
   }
 }
 
+// ✅ Delete an order (and its items)
 export async function deleteOrder(id: number) {
   try {
-    // Delete order items first (due to foreign key constraint)
     await prisma.orderItem.deleteMany({
       where: { orderId: id },
     })
-    
-    // Then delete the order
-    const order = await prisma.order.delete({
+
+    return await prisma.order.delete({
       where: { id },
     })
-    
-    return order
   } catch (error) {
     console.error('Error deleting order:', error)
     throw error
   }
 }
 
+// ✅ Fetch customers
 export async function getCustomers() {
   try {
-    const customers = await prisma.customer.findMany({
+    return await prisma.customer.findMany({
       orderBy: {
         name: 'asc',
       },
     })
-    return customers
   } catch (error) {
     console.error('Error fetching customers:', error)
     throw error
   }
 }
 
+// ✅ Fetch employees
 export async function getEmployees() {
   try {
-    const employees = await prisma.employee.findMany({
+    return await prisma.employee.findMany({
       orderBy: {
         name: 'asc',
       },
     })
-    return employees
   } catch (error) {
     console.error('Error fetching employees:', error)
     throw error

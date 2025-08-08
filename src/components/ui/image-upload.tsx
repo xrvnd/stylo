@@ -12,7 +12,7 @@ interface ImageUploadProps {
   maxFiles?: number
 }
 
-export function ImageUpload({ images, onImagesChange, maxFiles = 5 }: ImageUploadProps) {
+export function ImageUpload({ images, onImagesChange, maxFiles = 25 }: ImageUploadProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newImages = acceptedFiles.map(file => ({
       url: URL.createObjectURL(file),
@@ -53,7 +53,7 @@ export function ImageUpload({ images, onImagesChange, maxFiles = 5 }: ImageUploa
           <p>Drag & drop images here, or click to select</p>
         )}
         <p className="text-sm text-gray-500 mt-2">
-          PNG, JPG up to 5MB (max {maxFiles} files)
+          PNG, JPG up to 25MB (max 25 files)
         </p>
       </div>
 

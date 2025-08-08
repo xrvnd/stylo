@@ -1,112 +1,119 @@
-import { notFound } from 'next/navigation'
-import { getOrderById } from '@/lib/data/orders' 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { OrderDetailActions } from './OrderDetailActions'
+import { notFound } from "next/navigation"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { getOrderById } from "@/lib/data/orders"
 
-type Props = {
-  params: { id: string }
-}
-
-// The page component itself
-export default async function OrderPage(props: Props) {
-  const { params } = props; // get params --> Next.js best practice
-  
-  // fetch the specific order by its ID
-  const order = await getOrderById(parseInt(params.id))
+export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const order = await getOrderById(parseInt(id))
 
   if (!order) {
     notFound()
   }
 
-  // helper function to format dates nicely
-  const formatDate = (date: Date) => 
-    new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short' }).format(date)
+  // Handle possible null values
+  const totalAmount = order.totalAmount ?? 0
+  const advanceAmount = order.advanceAmount ?? 0
+  const remainingDue = totalAmount - advanceAmount
 
-  // Helper function to format numbers as Indian Rupees
-  const formatCurrency = (amount: number) => 
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount)
+  // Convert images from bytes to base64
+  const images =
+    order.orderImages?.map((img) => {
+      if (!img.image) return null
+      const base64 = Buffer.from(img.image).toString("base64")
+      return `data:image/jpeg;base64,${base64}`
+    }).filter(Boolean) || []
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* HEADER SECTION WITH TITLE AND ACTION BUTTONS */}
-      <div className="flex justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Order #{order.orderId || order.id}</h1>
-          <p className="text-muted-foreground">
-            Created: {formatDate(order.createdAt)}
-          </p>
-        </div>
-        
-        {/* action button comp.s here */}
-        <OrderDetailActions order={order} />
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Order #{order.orderNumber}</h1>
 
-      {/* MAIN CONTENT GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* customer info Card */}
+      {/* Customer Info */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardHeader><CardTitle>Customer Information</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p><span className="font-semibold">Name:</span> {order.customer.name}</p>
-            <p><span className="font-semibold">Phone:</span> {order.customer.phone}</p>
-            <p><span className="font-semibold">Email:</span> {order.customer.email || 'N/A'}</p>
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p><strong>Name:</strong> {order.customer?.name}</p>
+            <p><strong>Phone:</strong> {order.customer?.phone}</p>
+            <p><strong>Email:</strong> {order.customer?.email}</p>
           </CardContent>
         </Card>
 
-        {/* additional Information Card */}
         <Card>
-          <CardHeader><CardTitle>Additional Information</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p><span className="font-semibold">Employee:</span> {order.employee?.name || 'Unassigned'}</p>
-            <p><span className="font-semibold">Due Date:</span> {order.dueDate ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(order.dueDate) : 'N/A'}</p>
-            <p><span className="font-semibold">Notes:</span> {order.notes || 'None'}</p>
+          <CardHeader>
+            <CardTitle>Additional Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p><strong>Employee:</strong> {order.employee?.name}</p>
+            <p><strong>Due Date:</strong> {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : "N/A"}</p>
+            <p><strong>Notes:</strong> {order.notes}</p>
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between items-center"><span>Status:</span> <Badge>{order.status}</Badge></div>
-              <div className="flex justify-between"><span>Total Amount:</span> <strong>{formatCurrency(order.totalAmount)}</strong></div>
-              <div className="flex justify-between"><span>Advance Paid:</span> <strong>{formatCurrency(order.advanceAmount)}</strong></div>
-              <hr className="my-2" />
-              <div className="flex justify-between text-lg"><span>Remaining Due:</span> <strong className="text-red-600">{formatCurrency(order.totalAmount - order.advanceAmount)}</strong></div>
-            </CardContent>
+          <CardHeader>
+            <CardTitle>Order Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p><strong>Status:</strong> {order.status}</p>
+            <p><strong>Total Amount:</strong> ₹{totalAmount.toLocaleString()}</p>
+            <p><strong>Advance Paid:</strong> ₹{advanceAmount.toLocaleString()}</p>
+            <p><strong>Remaining Due:</strong> ₹{remainingDue.toLocaleString()}</p>
+          </CardContent>
         </Card>
       </div>
 
-      {/* Order Items Table */}
+      {/* Order Items */}
       <Card>
-        <CardHeader><CardTitle>Order Items</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Order Items</CardTitle>
+        </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {order.orderItems.map(item => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.description}</TableCell>
-                  <TableCell className="text-right">{item.quantity}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.price * item.quantity)}</TableCell>
-                </TableRow>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left p-2">Description</th>
+                <th className="text-left p-2">Quantity</th>
+                <th className="text-left p-2">Price</th>
+                <th className="text-left p-2">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.orderItems?.map((item, idx) => (
+                <tr key={idx} className="border-b">
+                  <td className="p-2">{item.description}</td>
+                  <td className="p-2">{item.quantity}</td>
+                  <td className="p-2">₹{item.price.toLocaleString()}</td>
+                  <td className="p-2">₹{(item.price * item.quantity).toLocaleString()}</td>
+                </tr>
               ))}
-              <TableRow className="font-bold bg-muted/50">
-                <TableCell colSpan={3} className="text-right">Grand Total</TableCell>
-                <TableCell className="text-right">{formatCurrency(order.totalAmount)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </CardContent>
       </Card>
+
+      {/* Uploaded Images */}
+      {images.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Uploaded Images</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {images.map((img, index) => (
+                <div key={index} className="border rounded overflow-hidden">
+                  <img
+                    src={img}
+                    alt={`Order image ${index + 1}`}
+                    className="w-full h-48 object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
