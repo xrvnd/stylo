@@ -13,6 +13,13 @@ import {
 } from '@/components/ui/table'
 import { Search } from 'lucide-react'
 import Link from 'next/link'
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface Customer {
   id: number
@@ -31,20 +38,56 @@ interface CustomerTableProps {
 
 export function CustomerTable({ customers }: CustomerTableProps) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
 
-  // Filter customers based on search term
-  const filteredCustomers = customers.filter(customer => {
+  // Filter customers
+  const filteredCustomers = customers.filter((customer) => {
     const search = searchTerm.toLowerCase()
-    return (
+
+    const matchesSearch =
       customer.name.toLowerCase().includes(search) ||
       (customer.nickname?.toLowerCase() || '').includes(search) ||
-      customer.phone.includes(searchTerm) // Keep case sensitive for phone numbers
-    )
+      customer.phone.includes(searchTerm)
+
+    const matchesSelection =
+      !selectedCustomerId || customer.id.toString() === selectedCustomerId
+
+    return matchesSearch && matchesSelection
   })
+
+  // Get selected customer for phone display
+  const selectedCustomer = customers.find(
+    (c) => c.id.toString() === selectedCustomerId
+  )
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      {/* Select customer dropdown */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Select
+          onValueChange={(value) => setSelectedCustomerId(value)}
+          value={selectedCustomerId}
+        >
+          <SelectTrigger className="w-full sm:w-[250px]">
+            <SelectValue placeholder="Select a customer..." />
+          </SelectTrigger>
+          <SelectContent>
+            {customers.map((customer) => (
+              <SelectItem key={customer.id} value={customer.id.toString()}>
+                {customer.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Display selected phone number */}
+        {selectedCustomer && (
+          <div className="text-sm text-muted-foreground">
+            📞 {selectedCustomer.phone}
+          </div>
+        )}
+
+        {/* Search box */}
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -56,6 +99,7 @@ export function CustomerTable({ customers }: CustomerTableProps) {
         </div>
       </div>
 
+      {/* Table */}
       <Table>
         <TableHeader>
           <TableRow>

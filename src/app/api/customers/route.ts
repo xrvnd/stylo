@@ -9,6 +9,12 @@ export async function GET() {
     const customers = await prisma.customer.findMany({
       orderBy: {
         createdAt: 'desc'
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true
       }
     })
     return NextResponse.json(customers)
@@ -33,7 +39,7 @@ export async function POST(request: Request) {
       data: validation.data
     })
     return NextResponse.json(customer, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     if (error.code === 'P2002') {
       return NextResponse.json(
         { error: 'A customer with this email already exists' },

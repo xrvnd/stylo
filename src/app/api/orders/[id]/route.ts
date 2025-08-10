@@ -1,200 +1,118 @@
-import { prisma } from '@/lib/db/prisma'
-import { NextResponse } from 'next/server'
-import { orderSchema } from '@/lib/validations/schema'
-import { validateId } from '@/lib/validations/middleware'
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 
-type RouteParams = {
-  params: Promise<{
-    id: string
-  }>
-}
-
-// GET /api/orders/[id] - Get specific order
-export async function GET(
-  request: Request,
-  { params }: RouteParams
-) {
-  const { id } = await params
-  const validation = validateId(id)
-  if (!validation.success) {
-    return validation.error
+// GET handler to fetch a single order's details
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const id = parseInt(params.id, 10);
+  if (isNaN(id)) {
+    return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 });
   }
 
   try {
     const order = await prisma.order.findUnique({
-      where: {
-        id: validation.id
-      },
+      where: { id },
       include: {
         customer: true,
         employee: true,
         orderItems: true,
-        orderImages: true
-      }
-    })
+        orderImages: {
+          select: { // Only select the ID, we don't need the heavy image data here
+            id: true,
+          },
+        },
+      },
+    });
 
     if (!order) {
-      return NextResponse.json(
-        { error: 'Order not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    return NextResponse.json(order)
+    return NextResponse.json(order);
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch order' },
-      { status: 500 }
-    )
+    console.error(`Error fetching order ${id}:`, error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// PUT /api/orders/[id] - Update order
-export async function PUT(
-  request: Request,
-  { params }: RouteParams
-) {
-  const { id } = await params
-  const validation = validateId(id)
-  if (!validation.success) {
-    return validation.error
+// PUT handler to update an order
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  const orderId = parseInt(params.id, 10);
+  if (isNaN(orderId)) {
+    return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 });
   }
 
   try {
-    const formData = await request.formData()
-    const orderData = JSON.parse(formData.get('data') as string)
-    const existingImageIds = JSON.parse(formData.get('imageIds') as string || '[]')
-    const newImageFiles = formData.getAll('images') as File[]
-
-    // Get the existing order to preserve some fields
-    const existingOrder = await prisma.order.findUnique({
-      where: { id: validation.id },
-      select: { customerId: true, status: true }
-    })
-
-    if (!existingOrder) {
-      return NextResponse.json(
-        { error: 'Order not found' },
-        { status: 404 }
-      )
+    const formData = await request.formData();
+    const dataString = formData.get('data');
+    if (typeof dataString !== 'string') {
+      return NextResponse.json({ error: 'Form data is missing' }, { status: 400 });
     }
 
-    // Calculate total amount from items
-    const totalAmount = orderData.items.reduce(
-      (sum: number, item: any) => sum + (Number(item.quantity) * Number(item.price)),
-      0
-    )
+    const data = JSON.parse(dataString);
+    const { employeeId, notes, dueDate, advancePaid, items } = data;
 
-    // Prepare the order data for validation
-    const orderDataForValidation = {
-      customerId: existingOrder.customerId,
-      status: existingOrder.status,
-      employeeId: orderData.employeeId,
-      notes: orderData.notes,
-      dueDate: orderData.dueDate,
-      totalAmount,
-      orderItems: orderData.items.map((item: any) => ({
-        description: item.description,
-        quantity: Number(item.quantity),
-        price: Number(item.price)
-      }))
-    }
+    // --- Image Handling ---
+    const imageIdsToKeep = JSON.parse(formData.get('imageIds') as string || '[]') as number[];
+    const newImageFiles = formData.getAll('images').filter((val): val is File => val instanceof File);
 
-    console.log('Data for validation:', orderDataForValidation)
-
-    // Validate order data using Zod
-    const orderValidation = orderSchema.safeParse(orderDataForValidation)
-
-    if (!orderValidation.success) {
-      console.error('Validation error:', orderValidation.error.format())
-      return NextResponse.json(
-        { error: 'Invalid order data', details: orderValidation.error.format() },
-        { status: 400 }
-      )
-    }
-
-    // Start a transaction to handle both order update and images
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Delete removed images
-      await tx.orderImage.deleteMany({
-        where: {
-          orderId: validation.id,
-          id: { notIn: existingImageIds }
-        }
-      })
+      // 1. Find which images to delete
+      const existingImages = await tx.orderImage.findMany({
+        where: { orderId },
+        select: { id: true },
+      });
+      const imageIdsToDelete = existingImages
+        .filter(img => !imageIdsToKeep.includes(img.id))
+        .map(img => img.id);
 
-      // Process new images
-      const newImages = await Promise.all(
-        newImageFiles.map(async (file) => {
-          const buffer = Buffer.from(await file.arrayBuffer())
-          return tx.orderImage.create({
-            data: {
-              orderId: validation.id,
-              image: buffer
-            }
-          })
-        })
-      )
-
-      // Update order with validated data
-      const order = await tx.order.update({
-        where: {
-          id: validation.id
-        },
-        data: {
-          employeeId: orderValidation.data.employeeId,
-          notes: orderValidation.data.notes,
-          dueDate: orderValidation.data.dueDate,
-          totalAmount: orderValidation.data.totalAmount,
-          orderItems: {
-            deleteMany: {},
-            create: orderValidation.data.orderItems // Use orderItems from validated data
-          }
-        },
-        include: {
-          customer: true,
-          employee: true,
-          orderItems: true,
-          orderImages: true
-        }
-      })
-
-      return order
-    })
-
-    return NextResponse.json(updatedOrder)
-  } catch (error) {
-    console.error('Error updating order:', error)
-    return NextResponse.json(
-      { error: 'Failed to update order' },
-      { status: 500 }
-    )
-  }
-}
-
-// DELETE /api/orders/[id] - Delete order
-export async function DELETE(
-  request: Request,
-  { params }: RouteParams
-) {
-  const { id } = await params
-  const validation = validateId(id)
-  if (!validation.success) {
-    return validation.error
-  }
-
-  try {
-    await prisma.order.delete({
-      where: {
-        id: validation.id
+      // 2. Delete them
+      if (imageIdsToDelete.length > 0) {
+        await tx.orderImage.deleteMany({
+          where: { id: { in: imageIdsToDelete } },
+        });
       }
-    })
 
-    return new NextResponse(null, { status: 204 })
+      // 3. Update the order and add new images
+      const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+      
+      const orderUpdateData = {
+        notes,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        advanceAmount: advancePaid,
+        totalAmount,
+        employeeId: employeeId ? parseInt(employeeId, 10) : null,
+        orderItems: {
+          // This deletes all existing items and replaces them.
+          // For more complex logic (updating, deleting specific items), you'd need to iterate.
+          deleteMany: {},
+          create: items.map((item: any) => ({
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+        },
+        orderImages: {
+          create: await Promise.all(newImageFiles.map(async (file) => ({
+            image: Buffer.from(await file.arrayBuffer()),
+          }))),
+        },
+      };
+
+      return tx.order.update({
+        where: { id: orderId },
+        data: orderUpdateData,
+        include: { orderItems: true, orderImages: true },
+      });
+    });
+
+    return NextResponse.json(updatedOrder, { status: 200 });
+
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to delete order' },
-      { status: 500 }
-    )
+    console.error(`Error updating order ${orderId}:`, error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
