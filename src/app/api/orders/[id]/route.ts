@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { Prisma } from '@prisma/client';
 
-// GET handler to fetch a single order's details
+// GET handler (no changes)
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const id = parseInt(params.id, 10);
   if (isNaN(id)) {
@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         employee: true,
         orderItems: true,
         orderImages: {
-          select: { // Only select the ID, we don't need the heavy image data here
+          select: {
             id: true,
           },
         },
@@ -35,83 +35,108 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-// PUT handler to update an order
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const orderId = parseInt(params.id, 10);
-  if (isNaN(orderId)) {
+// PUT handler (no changes)
+export async function PUT(request: Request, { params }: { params: { id:string } }) {
+    // ... (your existing PUT logic remains here)
+    const orderId = parseInt(params.id, 10);
+    if (isNaN(orderId)) {
+      return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 });
+    }
+  
+    try {
+      const formData = await request.formData();
+      const dataString = formData.get('data');
+      if (typeof dataString !== 'string') {
+        return NextResponse.json({ error: 'Form data is missing' }, { status: 400 });
+      }
+  
+      const data = JSON.parse(dataString);
+      const { employeeId, notes, dueDate, advancePaid, items } = data;
+  
+      const imageIdsToKeep = JSON.parse(formData.get('imageIds') as string || '[]') as number[];
+      const newImageFiles = formData.getAll('images').filter((val): val is File => val instanceof File);
+  
+      const updatedOrder = await prisma.$transaction(async (tx) => {
+        const existingImages = await tx.orderImage.findMany({
+          where: { orderId },
+          select: { id: true },
+        });
+        const imageIdsToDelete = existingImages
+          .filter(img => !imageIdsToKeep.includes(img.id))
+          .map(img => img.id);
+  
+        if (imageIdsToDelete.length > 0) {
+          await tx.orderImage.deleteMany({
+            where: { id: { in: imageIdsToDelete } },
+          });
+        }
+  
+        const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+        
+        const orderUpdateData = {
+          notes,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          advanceAmount: advancePaid,
+          totalAmount,
+          employeeId: employeeId ? parseInt(employeeId, 10) : null,
+          orderItems: {
+            deleteMany: {},
+            create: items.map((item: any) => ({
+              description: item.description,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+          },
+          orderImages: {
+            create: await Promise.all(newImageFiles.map(async (file) => ({
+              image: Buffer.from(await file.arrayBuffer()),
+            }))),
+          },
+        };
+  
+        return tx.order.update({
+          where: { id: orderId },
+          data: orderUpdateData,
+          include: { orderItems: true, orderImages: true },
+        });
+      });
+  
+      return NextResponse.json(updatedOrder, { status: 200 });
+  
+    } catch (error) {
+      console.error(`Error updating order ${orderId}:`, error);
+      if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof SyntaxError) {
+        return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+}
+
+
+// --- NEW DELETE HANDLER ---
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const id = parseInt(params.id, 10);
+  if (isNaN(id)) {
     return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 });
   }
 
   try {
-    const formData = await request.formData();
-    const dataString = formData.get('data');
-    if (typeof dataString !== 'string') {
-      return NextResponse.json({ error: 'Form data is missing' }, { status: 400 });
+    // Check if the order exists before attempting to delete
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const data = JSON.parse(dataString);
-    const { employeeId, notes, dueDate, advancePaid, items } = data;
+    // Thanks to `onDelete: Cascade` in your schema, this one command
+    // will delete the order and all its related items and images.
+    await prisma.order.delete({ where: { id } });
 
-    // --- Image Handling ---
-    const imageIdsToKeep = JSON.parse(formData.get('imageIds') as string || '[]') as number[];
-    const newImageFiles = formData.getAll('images').filter((val): val is File => val instanceof File);
-
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      // 1. Find which images to delete
-      const existingImages = await tx.orderImage.findMany({
-        where: { orderId },
-        select: { id: true },
-      });
-      const imageIdsToDelete = existingImages
-        .filter(img => !imageIdsToKeep.includes(img.id))
-        .map(img => img.id);
-
-      // 2. Delete them
-      if (imageIdsToDelete.length > 0) {
-        await tx.orderImage.deleteMany({
-          where: { id: { in: imageIdsToDelete } },
-        });
-      }
-
-      // 3. Update the order and add new images
-      const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-      
-      const orderUpdateData = {
-        notes,
-        dueDate: dueDate ? new Date(dueDate) : null,
-        advanceAmount: advancePaid,
-        totalAmount,
-        employeeId: employeeId ? parseInt(employeeId, 10) : null,
-        orderItems: {
-          // This deletes all existing items and replaces them.
-          // For more complex logic (updating, deleting specific items), you'd need to iterate.
-          deleteMany: {},
-          create: items.map((item: any) => ({
-            description: item.description,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-        },
-        orderImages: {
-          create: await Promise.all(newImageFiles.map(async (file) => ({
-            image: Buffer.from(await file.arrayBuffer()),
-          }))),
-        },
-      };
-
-      return tx.order.update({
-        where: { id: orderId },
-        data: orderUpdateData,
-        include: { orderItems: true, orderImages: true },
-      });
-    });
-
-    return NextResponse.json(updatedOrder, { status: 200 });
-
+    return NextResponse.json({ message: 'Order deleted successfully' }, { status: 200 });
   } catch (error) {
-    console.error(`Error updating order ${orderId}:`, error);
-    if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 });
+    console.error(`Error deleting order ${id}:`, error);
+    // Handle cases where the deletion might fail for other reasons
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json({ error: 'Failed to delete order due to a database constraint.' }, { status: 409 });
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
