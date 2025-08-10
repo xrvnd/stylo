@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, ChevronsUpDown } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -18,7 +18,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-// Import the component AND the type we created for it
 import { ImageUpload, ImageProp } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -27,8 +26,13 @@ type OrderItem = { description: string; price: number }
 type Customer = { id: number; name: string; phone?: string }
 type Employee = { id: number; name: string }
 
-export default function NewOrderPage() {
+function NewOrderPageComponent() {
   const router = useRouter()
+  // --- MODIFICATION START ---
+  // Use the hook to read URL query parameters
+  const searchParams = useSearchParams()
+  // --- MODIFICATION END ---
+
   const [loading, setLoading] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -45,12 +49,13 @@ export default function NewOrderPage() {
     advancePayment: '',
   })
 
-  // Use the correct state type for images
   const [images, setImages] = useState<ImageProp[]>([]);
   const [comboboxOpen, setComboboxOpen] = useState(false)
 
+  // This useEffect fetches the master lists of customers and employees
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const [customersRes, employeesRes] = await Promise.all([
           fetch('/api/customers'),
@@ -66,10 +71,34 @@ export default function NewOrderPage() {
       } catch (error) {
         console.error('Error loading customers and employees', error)
         toast.error('Error loading customers and employees')
+      } finally {
+        setLoading(false);
       }
     }
     fetchData()
   }, [])
+
+  // --- MODIFICATION START ---
+  // This new useEffect runs after the customer list is loaded
+  // It checks the URL for a customerId and pre-fills the form.
+  useEffect(() => {
+    const customerIdFromUrl = searchParams.get('customerId');
+    if (customerIdFromUrl && customers.length > 0) {
+      const preselectedCustomer = customers.find(c => c.id.toString() === customerIdFromUrl);
+      if (preselectedCustomer) {
+        setFormData(prev => ({
+          ...prev,
+          customerId: preselectedCustomer.id.toString(),
+          customerName: preselectedCustomer.name,
+          customerPhone: preselectedCustomer.phone || ''
+        }));
+        // Optional: remove the query param from URL to clean it up, without reloading the page
+        router.replace('/orders/new', {scroll: false});
+      }
+    }
+  }, [customers, searchParams, router]); // Dependency array ensures this runs at the right time
+  // --- MODIFICATION END ---
+
 
   const { totalAmount, advanceAmount, remainingAmount } = useMemo(() => {
     const total = formData.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
@@ -236,7 +265,6 @@ export default function NewOrderPage() {
               <ImageUpload
                 images={images}
                 onImagesChange={setImages}
-                // --- Updated Value ---
                 maxFiles={25}
               />
             </div>
@@ -278,5 +306,14 @@ export default function NewOrderPage() {
         </div>
       </form>
     </div>
+  )
+}
+
+
+export default function NewOrderPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <NewOrderPageComponent />
+    </Suspense>
   )
 }

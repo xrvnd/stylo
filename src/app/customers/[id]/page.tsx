@@ -45,7 +45,10 @@ export default function CustomerPage({
             <Link href={`/customers/${customer.id}/edit`}>Edit Customer</Link>
           </Button>
           <Button asChild>
-            <Link href="/orders/new">Create Order</Link>
+            {/* --- MODIFICATION START --- */}
+            {/* We now pass the customer's ID in the URL */}
+            <Link href={`/orders/new?customerId=${customer.id}`}>Create Order</Link>
+            {/* --- MODIFICATION END --- */}
           </Button>
         </div>
       </div>
@@ -140,7 +143,7 @@ export default function CustomerPage({
             <TableBody>
               {customer.orders.map((order) => (
                 <TableRow key={order.id}>
-                  <TableCell>#{order.id}</TableCell>
+                  <TableCell>#{order.orderId}</TableCell>
                   <TableCell>{formatDistanceToNow(new Date(order.orderDate), { addSuffix: true })}</TableCell>
                   <TableCell>{order.orderItems.length}</TableCell>
                   <TableCell>
@@ -165,7 +168,7 @@ export default function CustomerPage({
                   <TableCell colSpan={6} className="text-center py-4">
                     <p className="text-sm text-gray-500">No orders yet</p>
                     <Button variant="link" asChild className="mt-2">
-                      <Link href="/orders/new">Create first order</Link>
+                      <Link href={`/orders/new?customerId=${customer.id}`}>Create first order</Link>
                     </Button>
                   </TableCell>
                 </TableRow>
