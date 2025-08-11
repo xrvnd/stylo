@@ -28,10 +28,7 @@ type Employee = { id: number; name: string }
 
 function NewOrderPageComponent() {
   const router = useRouter()
-  // --- MODIFICATION START ---
-  // Use the hook to read URL query parameters
   const searchParams = useSearchParams()
-  // --- MODIFICATION END ---
 
   const [loading, setLoading] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -78,8 +75,7 @@ function NewOrderPageComponent() {
     fetchData()
   }, [])
 
-  // --- MODIFICATION START ---
-  // This new useEffect runs after the customer list is loaded
+  // This useEffect runs after the customer list is loaded
   // It checks the URL for a customerId and pre-fills the form.
   useEffect(() => {
     const customerIdFromUrl = searchParams.get('customerId');
@@ -92,12 +88,10 @@ function NewOrderPageComponent() {
           customerName: preselectedCustomer.name,
           customerPhone: preselectedCustomer.phone || ''
         }));
-        // Optional: remove the query param from URL to clean it up, without reloading the page
         router.replace('/orders/new', {scroll: false});
       }
     }
-  }, [customers, searchParams, router]); // Dependency array ensures this runs at the right time
-  // --- MODIFICATION END ---
+  }, [customers, searchParams, router]);
 
 
   const { totalAmount, advanceAmount, remainingAmount } = useMemo(() => {
@@ -236,12 +230,26 @@ function NewOrderPageComponent() {
 
               <div className="space-y-2">
                 <Label htmlFor="employeeId">Assign Employee</Label>
-                <Select value={formData.employeeId} onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value }))}>
+                {/* --- MODIFICATION START --- */}
+                <Select
+                  value={formData.employeeId}
+                  onValueChange={(value) => {
+                    // If the user selects our special "unassign" value, clear the employeeId.
+                    // Otherwise, set it to the selected value.
+                    const newEmployeeId = value === "unassign" ? "" : value;
+                    setFormData(prev => ({ ...prev, employeeId: newEmployeeId }));
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Optional: Select an employee" /></SelectTrigger>
                   <SelectContent>
+                    {/* This item has a non-empty value to satisfy the component's rule */}
+                    <SelectItem value="unassign">
+                      <span className="text-muted-foreground">-- No Employee --</span>
+                    </SelectItem>
                     {employees.map((e) => (<SelectItem key={e.id} value={e.id.toString()}>{e.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
+                {/* --- MODIFICATION END --- */}
               </div>
 
               <div className="space-y-2">
@@ -308,7 +316,6 @@ function NewOrderPageComponent() {
     </div>
   )
 }
-
 
 export default function NewOrderPage() {
   return (
