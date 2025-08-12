@@ -22,7 +22,8 @@ import { ImageUpload, ImageProp } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type OrderItem = { description: string; price: number }
+// --- MODIFICATION 1: Allow price to be string for input control ---
+type OrderItem = { description: string; price: string | number }
 type Customer = { id: number; name: string; phone?: string }
 type Employee = { id: number; name: string }
 
@@ -42,14 +43,14 @@ function NewOrderPageComponent() {
     employeeId: '',
     notes: '',
     dueDate: '',
-    items: [{ description: '', price: 0 }] as OrderItem[],
+    // --- MODIFICATION 2: Initialize price as an empty string ---
+    items: [{ description: '', price: '' }] as OrderItem[],
     advancePayment: '',
   })
 
   const [images, setImages] = useState<ImageProp[]>([]);
   const [comboboxOpen, setComboboxOpen] = useState(false)
 
-  // This useEffect fetches the master lists of customers and employees
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -75,8 +76,6 @@ function NewOrderPageComponent() {
     fetchData()
   }, [])
 
-  // This useEffect runs after the customer list is loaded
-  // It checks the URL for a customerId and pre-fills the form.
   useEffect(() => {
     const customerIdFromUrl = searchParams.get('customerId');
     if (customerIdFromUrl && customers.length > 0) {
@@ -95,12 +94,14 @@ function NewOrderPageComponent() {
 
 
   const { totalAmount, advanceAmount, remainingAmount } = useMemo(() => {
+    // This calculation logic works perfectly with strings or numbers
     const total = formData.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
     const advance = Number(formData.advancePayment) || 0
     return { totalAmount: total, advanceAmount: advance, remainingAmount: total - advance }
   }, [formData.items, formData.advancePayment])
 
-  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', price: 0 }] }))
+  // --- MODIFICATION 3: Add new items with an empty string for price ---
+  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', price: '' }] }))
   const removeItem = (index: number) => setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }))
   const updateItem = (index: number, field: keyof OrderItem, value: string | number) =>
     setFormData(prev => ({ ...prev, items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item) }))
@@ -109,7 +110,7 @@ function NewOrderPageComponent() {
     e.preventDefault()
     if (!formData.orderId) { toast.error('Please enter an Order ID.'); return }
     if (!formData.customerId) { toast.error('Please select a customer.'); return }
-    if (formData.items.some(item => !item.description || item.price <= 0)) {
+    if (formData.items.some(item => !item.description || Number(item.price) <= 0)) {
       toast.error('Please fill in all item details with a price greater than zero.')
       return
     }
@@ -124,7 +125,12 @@ function NewOrderPageComponent() {
         notes: formData.notes,
         dueDate: formData.dueDate,
         advanceAmount: formData.advancePayment || '0',
-        orderItems: formData.items.map(item => ({ ...item, quantity: 1 })),
+        // --- MODIFICATION 4: Ensure price is a number before sending to backend ---
+        orderItems: formData.items.map(item => ({
+          description: item.description,
+          price: Number(item.price) || 0,
+          quantity: 1
+        })),
       };
 
       const formDataToSend = new FormData();
@@ -164,6 +170,7 @@ function NewOrderPageComponent() {
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            {/* ... other form fields (no changes here) ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="orderId">Order ID</Label>
@@ -230,26 +237,21 @@ function NewOrderPageComponent() {
 
               <div className="space-y-2">
                 <Label htmlFor="employeeId">Assign Employee</Label>
-                {/* --- MODIFICATION START --- */}
                 <Select
                   value={formData.employeeId}
                   onValueChange={(value) => {
-                    // If the user selects our special "unassign" value, clear the employeeId.
-                    // Otherwise, set it to the selected value.
                     const newEmployeeId = value === "unassign" ? "" : value;
                     setFormData(prev => ({ ...prev, employeeId: newEmployeeId }));
                   }}
                 >
                   <SelectTrigger><SelectValue placeholder="Optional: Select an employee" /></SelectTrigger>
                   <SelectContent>
-                    {/* This item has a non-empty value to satisfy the component's rule */}
                     <SelectItem value="unassign">
                       <span className="text-muted-foreground">-- No Employee --</span>
                     </SelectItem>
                     {employees.map((e) => (<SelectItem key={e.id} value={e.id.toString()}>{e.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
-                {/* --- MODIFICATION END --- */}
               </div>
 
               <div className="space-y-2">
@@ -294,7 +296,16 @@ function NewOrderPageComponent() {
                 </div>
                 <div className="w-40 space-y-2">
                   <Label>Price (₹)</Label>
-                  <Input type="number" value={item.price} onChange={(e) => updateItem(index, 'price', Number(e.target.value))} min="0.01" step="0.01" required />
+                  {/* --- MODIFICATION 5: Bind value to string state and update with string --- */}
+                  <Input
+                    type="number"
+                    value={item.price}
+                    onChange={(e) => updateItem(index, 'price', e.target.value)}
+                    placeholder="0.00"
+                    min="0.01"
+                    step="0.01"
+                    required
+                  />
                 </div>
                 <Button type="button" variant="destructive" onClick={() => removeItem(index)} className="mb-1">Remove</Button>
               </div>
