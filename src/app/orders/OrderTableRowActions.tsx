@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,31 +11,21 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // AlertDialogTrigger for better accessibility and control
 } from '@/components/ui/alert-dialog'
-import { toast } from 'sonner'
 
-export function OrderTableRowActions({ orderId }: { orderId: number }) {
-  const router = useRouter()
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [isAlertOpen, setAlertOpen] = useState(false)
+interface OrderTableRowActionsProps {
+  orderId: number;
+  onDelete: () => void;
+  isDeleting: boolean;
+}
 
-  const handleDelete = async () => {
-    setIsDeleting(true)
-    try {
-      const response = await fetch(`/api/orders/${orderId}`, { method: 'DELETE' })
-      if (!response.ok) throw new Error('Failed to delete order')
-      toast.success('Order deleted successfully')
-      router.refresh() // Refresh the table to show the change
-    } catch (error) {
-      toast.error('Could not delete the order.')
-    } finally {
-      setIsDeleting(false)
-      setAlertOpen(false)
-    }
-  }
-
+export function OrderTableRowActions({ orderId, onDelete, isDeleting }: OrderTableRowActionsProps) {
+  
   return (
-    <>
+    // The AlertDialog no longer needs to be controlled by local state.
+    // Using AlertDialogTrigger is the standard way.
+    <AlertDialog>
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" asChild>
           <Link href={`/orders/${orderId}`}>View</Link>
@@ -45,32 +33,29 @@ export function OrderTableRowActions({ orderId }: { orderId: number }) {
         <Button variant="outline" size="sm" asChild>
           <Link href={`/orders/${orderId}/edit`}>Edit</Link>
         </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setAlertOpen(true)}
-          disabled={isDeleting}
-        >
-          Delete
-        </Button>
+        {/* The Delete button now just triggers the dialog to open. */}
+        <AlertDialogTrigger asChild>
+          <Button variant="destructive" size="sm" disabled={isDeleting}>
+            Delete
+          </Button>
+        </AlertDialogTrigger>
       </div>
 
-      <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete this order.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete this order.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          {/* action button now calls the onDelete function passed down as a prop. */}
+          <AlertDialogAction onClick={onDelete} disabled={isDeleting}>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

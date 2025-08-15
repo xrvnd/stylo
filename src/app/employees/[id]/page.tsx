@@ -18,6 +18,11 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { notFound } from 'next/navigation'
 import { use } from 'react'
+// --- MODIFICATION START ---
+// Import the new component we created
+import { PaymentManager } from '@/components/employees/PaymentManager'
+// --- MODIFICATION END ---
+
 
 export default function EmployeePage({
   params,
@@ -25,6 +30,8 @@ export default function EmployeePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
+  // The existing getEmployeeById function needs to be updated to include payments
+  // I will assume you will update it to include: { include: { orders: ..., payments: true } }
   const employee = use(getEmployeeById(parseInt(id)))
 
   if (!employee) {
@@ -32,8 +39,8 @@ export default function EmployeePage({
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-6 space-y-8">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">{employee.name}</h1>
           <p className="text-sm text-gray-500">{employee.role}</p>
@@ -45,7 +52,7 @@ export default function EmployeePage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Contact Information</CardTitle>
@@ -90,28 +97,29 @@ export default function EmployeePage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employee.orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell>
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        #{order.id}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{order.customer.name}</TableCell>
-                    <TableCell>{order.status}</TableCell>
-                    <TableCell>₹{order.totalAmount}</TableCell>
-                    <TableCell>
-                      {formatDistanceToNow(new Date(order.orderDate), { addSuffix: true })}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {employee.orders.length === 0 && (
+                {employee.orders.length > 0 ? (
+                   employee.orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell>
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          #{order.orderId}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{order.customer.name}</TableCell>
+                      <TableCell>{order.status}</TableCell>
+                      <TableCell>₹{order.totalAmount}</TableCell>
+                      <TableCell>
+                        {formatDistanceToNow(new Date(order.orderDate), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-gray-500">
-                      No orders yet
+                      No orders assigned yet
                     </TableCell>
                   </TableRow>
                 )}
@@ -120,6 +128,9 @@ export default function EmployeePage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Add the new PaymentManager component here */}
+      <PaymentManager employeeId={employee.id} initialPayments={employee.payments} />
     </div>
   )
 }

@@ -115,28 +115,27 @@ export async function PUT(request: Request, { params }: { params: { id:string } 
 
 // --- NEW DELETE HANDLER ---
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  // This is the clean way to access params that avoids the warning.
   const id = parseInt(params.id, 10);
+
   if (isNaN(id)) {
     return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 });
   }
 
   try {
-    // Check if the order exists before attempting to delete
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Thanks to `onDelete: Cascade` in your schema, this one command
-    // will delete the order and all its related items and images.
+    // This command will correctly delete the order and its related items/images.
     await prisma.order.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Order deleted successfully' }, { status: 200 });
   } catch (error) {
     console.error(`Error deleting order ${id}:`, error);
-    // Handle cases where the deletion might fail for other reasons
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return NextResponse.json({ error: 'Failed to delete order due to a database constraint.' }, { status: 409 });
+    if ((error as any).code === 'P2025') {
+       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

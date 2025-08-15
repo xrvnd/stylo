@@ -1,17 +1,27 @@
 import { prisma } from '@/lib/db/prisma'
 
-// ✅ Get all orders (latest first)
 export async function getOrders() {
   try {
     return await prisma.order.findMany({
-      include: {
-        customer: true,
-        employee: true,
-        orderItems: true,
-        orderImages: true, // images included
+      // only select the data that the OrderTable component actually needs.
+      select: {
+        id: true,
+        orderId: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
+        paymentMethod: true, 
+        customer: {
+          select: {
+            name: true, // Only need the customer's name
+          },
+        },
+        _count: { // A more efficient way to get the number of items
+          select: { orderItems: true }
+        }
       },
       orderBy: {
-        orderDate: 'desc',
+        createdAt: 'desc', // It's better to order by creation date
       },
     })
   } catch (error) {
@@ -20,7 +30,7 @@ export async function getOrders() {
   }
 }
 
-// ✅ Get single order by ID
+// get single order by ID
 export async function getOrderById(id: number) {
   try {
     return await prisma.order.findUnique({
@@ -29,7 +39,7 @@ export async function getOrderById(id: number) {
         customer: true,
         employee: true,
         orderItems: true,
-        orderImages: true, // includes image bytes
+        orderImages: true,
       },
     })
   } catch (error) {
@@ -38,7 +48,9 @@ export async function getOrderById(id: number) {
   }
 }
 
-// ✅ Update only order status
+
+
+// update only order status
 export async function updateOrderStatus(
   id: number,
   status: 'PENDING' | 'PAID' | 'CANCELLED'
@@ -54,7 +66,7 @@ export async function updateOrderStatus(
   }
 }
 
-// ✅ Update an order & its items
+// update an order & its items
 export async function updateOrder(
   id: number,
   data: {
@@ -67,23 +79,18 @@ export async function updateOrder(
       quantity: number
       price: number
     }[]
-    advanceAmount?: number // ✅ renamed to match schema
+    advanceAmount?: number
   }
 ) {
   try {
     const order = await prisma.$transaction(async (prisma) => {
-      // Remove old items
       await prisma.orderItem.deleteMany({
         where: { orderId: id },
       })
-
-      // Recalculate total
       const totalAmount = data.orderItems.reduce(
         (sum, item) => sum + item.quantity * item.price,
         0
       )
-
-      // Update order
       return await prisma.order.update({
         where: { id },
         data: {
@@ -116,7 +123,7 @@ export async function updateOrder(
   }
 }
 
-// ✅ Delete an order (and its items)
+// delete an order (and its items)
 export async function deleteOrder(id: number) {
   try {
     await prisma.orderItem.deleteMany({
@@ -132,7 +139,7 @@ export async function deleteOrder(id: number) {
   }
 }
 
-// ✅ Fetch customers
+// FETCH customers
 export async function getCustomers() {
   try {
     return await prisma.customer.findMany({
@@ -146,7 +153,7 @@ export async function getCustomers() {
   }
 }
 
-// ✅ Fetch employees
+// FETCH employees
 export async function getEmployees() {
   try {
     return await prisma.employee.findMany({

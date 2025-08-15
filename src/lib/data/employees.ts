@@ -24,10 +24,16 @@ export function getEmployeeById(id: number) {
     include: {
       orders: {
         include: {
-          orderItems: true
+          orderItems: true,
+          customer: true, // FIX: This includes the customer data for each order
         },
         orderBy: {
           orderDate: 'desc'
+        }
+      },
+      payments: { // Also include the payments for the new UI
+        orderBy: {
+          paymentDate: 'desc'
         }
       }
     }
