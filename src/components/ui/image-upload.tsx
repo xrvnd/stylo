@@ -3,12 +3,17 @@
 import { useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle, // componenet for visual aid
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-// This type is crucial for the component to understand what it's dealing with
 export type ImageProp = {
-  id?: number;   // ID from the database for existing images
-  url: string;   // URL to display the image (can be a remote URL or a local object URL)
-  file?: File;   // The actual File object for new uploads
+  id?: number;
+  url: string;
+  file?: File;
 };
 
 interface ImageUploadProps {
@@ -26,14 +31,13 @@ export function ImageUpload({
 }: ImageUploadProps) {
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      // Map new files to our ImageProp structure
       const newImageProps: ImageProp[] = acceptedFiles.map(file => ({
         file: file,
-        url: URL.createObjectURL(file), // Create a temporary local URL for preview
+        url: URL.createObjectURL(file),
       }));
       
       const combined = [...images, ...newImageProps];
-      onImagesChange(combined.slice(0, maxFiles)); // Enforce maxFiles limit
+      onImagesChange(combined.slice(0, maxFiles));
     },
     [images, onImagesChange, maxFiles]
   );
@@ -41,12 +45,11 @@ export function ImageUpload({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "image/*": [".png", ".jpg", ".jpeg"] },
-    maxFiles: Math.max(0, maxFiles - images.length), // Only allow adding up to the limit
+    maxFiles: Math.max(0, maxFiles - images.length),
     maxSize: maxSizeMB * 1024 * 1024,
   });
 
   const removeImage = (indexToRemove: number) => {
-    // Revoke object URL to prevent memory leaks if it's a new file
     const imageToRemove = images[indexToRemove];
     if (imageToRemove.file) {
       URL.revokeObjectURL(imageToRemove.url);
@@ -78,22 +81,33 @@ export function ImageUpload({
       {images.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
           {images.map((image, index) => (
-            <div key={image.id || image.url} className="relative group aspect-square">
-              <img
-                src={image.url}
-                alt={image.file?.name || `Image ${image.id}`}
-                className="w-full h-full object-cover rounded-lg border"
-                // Clean up object URLs on unmount
-                onLoad={() => { if (image.file) URL.revokeObjectURL(image.url); }}
-              />
-              <button
-                type="button"
-                onClick={() => removeImage(index)}
-                className="absolute top-1 right-1 bg-red-600 text-white w-5 h-5 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                ✕
-              </button>
-            </div>
+            <Dialog key={image.id || image.url}>
+              <div className="relative group aspect-square">
+                <DialogTrigger asChild>
+                  <img
+                    src={image.url}
+                    alt={image.file?.name || `Image ${image.id}`}
+                    className="w-full h-full object-cover rounded-lg border cursor-pointer transition-transform hover:scale-105"
+                  />
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl p-2 sm:p-4">
+                  {/* --- FIX: Add the visually hidden title for accessibility --- */}
+                  <DialogTitle className="sr-only">Image Preview</DialogTitle>
+                  <img
+                    src={image.url}
+                    alt={image.file?.name || `Image ${image.id}`}
+                    className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
+                  />
+                </DialogContent>
+                <button
+                  type="button"
+                  onClick={() => removeImage(index)}
+                  className="absolute top-1 right-1 bg-red-600 text-white w-5 h-5 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                >
+                  ✕
+                </button>
+              </div>
+            </Dialog>
           ))}
         </div>
       )}

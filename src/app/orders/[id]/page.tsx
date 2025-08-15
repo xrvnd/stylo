@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { getOrderById } from "@/lib/data/orders"
+// --- MODIFICATION: Import the new client component ---
+import { ImageViewer } from "./ImageViewer";
 
 const formatWorkType = (workType: string | null) => {
   if (!workType) return "Simple Work";
@@ -102,17 +104,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <CardTitle>Uploaded Images</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {images.map((img, index) => (
-                <div key={index} className="border rounded overflow-hidden">
-                  <img
-                    src={img}
-                    alt={`Order image ${index + 1}`}
-                    className="w-full h-48 object-cover"
-                  />
-                </div>
-              ))}
-            </div>
+            {/* --- MODIFICATION: Replace the old div with our new interactive component (Dialog) --- */}
+            <ImageViewer images={images} />
           </CardContent>
         </Card>
       )}
