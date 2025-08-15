@@ -2,15 +2,59 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { Prisma } from '@prisma/client';
 
-// Define allowed work types here as well for consistency
 const ALLOWED_WORK_TYPES = ["SIMPLE_WORK", "HAND_WORK", "MACHINE_WORK"];
 
-// GET handler (no changes)
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  // ... (existing code is correct)
+  const id = parseInt(params.id, 10);
+  if (isNaN(id)) {
+    return NextResponse.json({ error: 'Invalid order ID' }, { status: 400 });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      // FIX: Using `select` to prevent circular JSON errors
+      select: {
+        id: true,
+        orderId: true,
+        employeeId: true,
+        notes: true,
+        dueDate: true,
+        advanceAmount: true,
+        status: true,
+        totalAmount: true,
+        paymentMethod: true,
+        createdAt: true,
+        customer: true, // Including the full customer is safe
+        employee: true, // Including the full employee is safe
+        orderItems: {   // For items, we select all their fields, which breaks the loop
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            price: true,
+            workType: true,
+          }
+        },
+        orderImages: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(order);
+  } catch (error) {
+    console.error(`Error fetching order ${id}:`, error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
-// PUT handler
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
     const orderId = parseInt(params.id, 10);
     if (isNaN(orderId)) {
@@ -31,7 +75,19 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       const newImageFiles = formData.getAll('images').filter((val): val is File => val instanceof File);
   
       const updatedOrder = await prisma.$transaction(async (tx) => {
-        // ... (image deletion logic remains the same)
+        const existingImages = await tx.orderImage.findMany({
+          where: { orderId },
+          select: { id: true },
+        });
+        const imageIdsToDelete = existingImages
+          .filter(img => !imageIdsToKeep.includes(img.id))
+          .map(img => img.id);
+  
+        if (imageIdsToDelete.length > 0) {
+          await tx.orderImage.deleteMany({
+            where: { id: { in: imageIdsToDelete } },
+          });
+        }
   
         const totalAmount = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
         
@@ -43,7 +99,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           employeeId: employeeId ? parseInt(employeeId, 10) : null,
           orderItems: {
             deleteMany: {},
-            // --- MODIFICATION: The 'workType' is now included when re-creating items ---
             create: items.map((item: any) => {
               const workType = item.workType && ALLOWED_WORK_TYPES.includes(item.workType)
                 ? item.workType
