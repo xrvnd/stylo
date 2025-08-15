@@ -1,121 +1,45 @@
-import { prisma } from '@/lib/db/prisma'
-import { NextResponse } from 'next/server'
-import { employeeSchema } from '@/lib/validations/schema'
-import { validateRequest, validateId } from '@/lib/validations/middleware'
+import { prisma } from '@/lib/db/prisma';
+import { NextResponse } from 'next/server';
+import { PaymentType } from '@prisma/client'; // Import the enum
 
 interface Params {
-  params: {
-    id: string
-  }
+  params: { id: string };
 }
 
-// GET /api/employees/[id] - Get specific employee
-export async function GET(request: Request, { params }: Params) {
-  const validation = validateId(params.id)
-  if (!validation.success) {
-    return validation.error
-  }
-
+export async function POST(request: Request, { params }: Params) {
   try {
-    const employee = await prisma.employee.findUnique({
-      where: {
-        id: validation.id
-      }
-    })
-
-    if (!employee) {
-      return NextResponse.json(
-        { error: 'Employee not found' },
-        { status: 404 }
-      )
+    const employeeId = parseInt(params.id, 10);
+    if (isNaN(employeeId)) {
+      return NextResponse.json({ error: 'Invalid employee ID' }, { status: 400 });
     }
 
-    // Get assigned orders count
-    const assignedOrders = await prisma.order.count({
-      where: {
-        employeeId: employee.id
-      }
-    })
+    const body = await request.json();
+    // Destructure the type from the body ---
+    const { amount, notes, type } = body;
 
-    return NextResponse.json({
-      ...employee,
-      assignedOrders
-    })
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch employee' },
-      { status: 500 }
-    )
-  }
-}
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return NextResponse.json({ error: 'Invalid amount provided' }, { status: 400 });
+    }
 
-// PUT /api/employees/[id] - Update employee
-export async function PUT(request: Request, { params }: Params) {
-  const idValidation = validateId(params.id)
-  if (!idValidation.success) {
-    return idValidation.error
-  }
+    // validate the type
+    if (!type || !Object.values(PaymentType).includes(type)) {
+      return NextResponse.json({ error: 'Invalid payment type' }, { status: 400 });
+    }
 
-  const validation = await validateRequest(employeeSchema)(request)
-  if (!validation.success) {
-    return validation.error
-  }
-
-  try {
-    const employee = await prisma.employee.update({
-      where: {
-        id: idValidation.id
+    const payment = await prisma.employeePayment.create({
+      data: {
+        employeeId,
+        amount,
+        notes,
+        type, // Save the type
+        paymentDate: new Date(),
       },
-      data: validation.data
-    })
-    return NextResponse.json(employee)
-  } catch (error: any) {
-    // Handle unique constraint violation
-    if (error.code === 'P2002') {
-      return NextResponse.json(
-        { error: 'An employee with this email already exists' },
-        { status: 409 }
-      )
-    }
-    return NextResponse.json(
-      { error: 'Failed to update employee' },
-      { status: 500 }
-    )
-  }
-}
+    });
 
-// DELETE /api/employees/[id] - Delete employee
-export async function DELETE(request: Request, { params }: Params) {
-  const validation = validateId(params.id)
-  if (!validation.success) {
-    return validation.error
-  }
+    return NextResponse.json(payment, { status: 201 });
 
-  try {
-    // Check if employee has any assigned orders
-    const assignedOrders = await prisma.order.count({
-      where: {
-        employeeId: validation.id
-      }
-    })
-
-    if (assignedOrders > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete employee with assigned orders' },
-        { status: 400 }
-      )
-    }
-
-    await prisma.employee.delete({
-      where: {
-        id: validation.id
-      }
-    })
-    return new NextResponse(null, { status: 204 })
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to delete employee' },
-      { status: 500 }
-    )
+    console.error('Failed to create employee payment:', error);
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

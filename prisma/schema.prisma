@@ -32,7 +32,7 @@ model Order {
   orderDate     DateTime    @default(now())
   dueDate       DateTime?
   status        String      @default("PENDING")
-  paymentMethod String?     // this field stores how the payment was made.
+  paymentMethod String?
   totalAmount   Int
   advanceAmount Int         @default(0)
   notes         String?
@@ -48,6 +48,7 @@ model OrderItem {
   orderId     Int
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   description String
+  workType    String   @default("SIMPLE_WORK") //stores typeof work
   quantity    Int
   price       Int
   createdAt   DateTime @default(now())

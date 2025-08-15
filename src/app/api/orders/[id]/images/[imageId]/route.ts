@@ -1,43 +1,50 @@
-import { prisma } from '@/lib/db/prisma'
-import { NextResponse } from 'next/server'
-import { validateId } from '@/lib/validations/middleware'
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { validateId } from '@/lib/validations/middleware';
 
 interface Params {
   params: {
-    id: string
-    imageId: string
-  }
+    id: string;
+    imageId: string;
+  };
 }
 
-// GET /api/orders/[id]/images/[imageId] - Get image
 export async function GET(request: Request, { params }: Params) {
-  const orderValidation = validateId(params.id)
-  const imageValidation = validateId(params.imageId)
+  // Destructure the ids from params first
+  const { id, imageId } = params;
+  
+  // Now pass the destructured variables to your validation function
+  const orderValidation = validateId(id);
+  const imageValidation = validateId(imageId);
 
   if (!orderValidation.success || !imageValidation.success) {
-    return new Response('Invalid ID', { status: 400 })
+    return new Response('Invalid ID', { status: 400 });
   }
 
   try {
-    const image = await prisma.orderImage.findUnique({
+    const orderImage = await prisma.orderImage.findUnique({
       where: {
         id: imageValidation.id,
-        orderId: orderValidation.id
-      }
-    })
+        orderId: orderValidation.id,
+      },
+      select: {
+        image: true,
+      },
+    });
 
-    if (!image) {
-      return new Response('Image not found', { status: 404 })
+    if (!orderImage) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    return new Response(image.image, {
+    return new NextResponse(orderImage.image, {
+      status: 200,
       headers: {
-        'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=31536000'
-      }
-    })
+        'Content-Type': 'image/*',
+      },
+    });
+
   } catch (error) {
-    console.error('Error fetching image:', error)
-    return new Response('Failed to fetch image', { status: 500 })
+    console.error(`Error fetching image ${imageId} for order ${id}:`, error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

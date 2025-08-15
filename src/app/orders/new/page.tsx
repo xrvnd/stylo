@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, ChevronsUpDown } from 'lucide-react'
-
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,8 +21,11 @@ import { ImageUpload, ImageProp } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-// --- MODIFICATION 1: Allow price to be string for input control ---
-type OrderItem = { description: string; price: string | number }
+type OrderItem = {
+  description: string;
+  price: string | number;
+  workType: string;
+}
 type Customer = { id: number; name: string; phone?: string }
 type Employee = { id: number; name: string }
 
@@ -43,8 +45,7 @@ function NewOrderPageComponent() {
     employeeId: '',
     notes: '',
     dueDate: '',
-    // --- MODIFICATION 2: Initialize price as an empty string ---
-    items: [{ description: '', price: '' }] as OrderItem[],
+    items: [{ description: '', price: '', workType: 'SIMPLE_WORK' }] as OrderItem[],
     advancePayment: '',
   })
 
@@ -92,16 +93,16 @@ function NewOrderPageComponent() {
     }
   }, [customers, searchParams, router]);
 
-
   const { totalAmount, advanceAmount, remainingAmount } = useMemo(() => {
-    // This calculation logic works perfectly with strings or numbers
     const total = formData.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
     const advance = Number(formData.advancePayment) || 0
     return { totalAmount: total, advanceAmount: advance, remainingAmount: total - advance }
   }, [formData.items, formData.advancePayment])
 
-  // --- MODIFICATION 3: Add new items with an empty string for price ---
-  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', price: '' }] }))
+  const addItem = () => setFormData(prev => ({
+    ...prev,
+    items: [...prev.items, { description: '', price: '', workType: 'SIMPLE_WORK' }]
+  }))
   const removeItem = (index: number) => setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }))
   const updateItem = (index: number, field: keyof OrderItem, value: string | number) =>
     setFormData(prev => ({ ...prev, items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item) }))
@@ -125,9 +126,8 @@ function NewOrderPageComponent() {
         notes: formData.notes,
         dueDate: formData.dueDate,
         advanceAmount: formData.advancePayment || '0',
-        // --- MODIFICATION 4: Ensure price is a number before sending to backend ---
         orderItems: formData.items.map(item => ({
-          description: item.description,
+          ...item,
           price: Number(item.price) || 0,
           quantity: 1
         })),
@@ -170,7 +170,6 @@ function NewOrderPageComponent() {
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            {/* ... other form fields (no changes here) ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="orderId">Order ID</Label>
@@ -286,17 +285,15 @@ function NewOrderPageComponent() {
             <CardTitle>Order Items</CardTitle>
             <Button type="button" onClick={addItem}>Add Item</Button>
           </CardHeader>
-
           <CardContent className="space-y-4">
             {formData.items.map((item, index) => (
-              <div key={index} className="flex gap-4 items-end">
-                <div className="flex-1 space-y-2">
+              <div key={index} className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="flex-1 space-y-2 w-full">
                   <Label>Description</Label>
                   <Input value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} placeholder="Item description" required />
                 </div>
-                <div className="w-40 space-y-2">
+                <div className="w-full sm:w-40 space-y-2">
                   <Label>Price (₹)</Label>
-                  {/* --- MODIFICATION 5: Bind value to string state and update with string --- */}
                   <Input
                     type="number"
                     value={item.price}
@@ -307,11 +304,26 @@ function NewOrderPageComponent() {
                     required
                   />
                 </div>
+                <div className="w-full sm:w-48 space-y-2">
+                  <Label>Work</Label>
+                  <Select
+                    value={item.workType}
+                    onValueChange={(value) => updateItem(index, 'workType', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select work type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SIMPLE_WORK">Simple Work</SelectItem>
+                      <SelectItem value="HAND_WORK">Hand Work</SelectItem>
+                      <SelectItem value="MACHINE_WORK">Machine Work</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button type="button" variant="destructive" onClick={() => removeItem(index)} className="mb-1">Remove</Button>
               </div>
             ))}
           </CardContent>
-
           <CardFooter className="flex flex-col items-end space-y-2 bg-slate-50 p-4 rounded-b-lg">
             <p className="text-lg">Total Amount: <span className="font-bold">₹{totalAmount.toFixed(2)}</span></p>
             <p className="text-md text-green-600">Advance Paid: <span className="font-semibold">₹{advanceAmount.toFixed(2)}</span></p>

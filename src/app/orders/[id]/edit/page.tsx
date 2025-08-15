@@ -11,7 +11,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload, ImageProp } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
 
-type OrderItem = { id?: number; description: string; quantity: number; price: number }
+type OrderItem = {
+  id?: number;
+  description: string;
+  quantity: number;
+  price: number;
+  workType: string;
+}
 type Employee = { id: number; name: string }
 
 export default function EditOrderPage() {
@@ -29,7 +35,6 @@ export default function EditOrderPage() {
     advancePaid: 0,
     items: [] as OrderItem[],
   });
-  // Separate state for images is cleaner
   const [images, setImages] = useState<ImageProp[]>([]);
 
   useEffect(() => {
@@ -55,9 +60,8 @@ export default function EditOrderPage() {
           notes: orderData.notes || '',
           dueDate: orderData.dueDate ? new Date(orderData.dueDate).toISOString().split('T')[0] : '',
           advancePaid: orderData.advanceAmount || 0,
-          items: orderData.orderItems || [],
+          items: orderData.orderItems.map((item: any) => ({ ...item, workType: item.workType || 'SIMPLE_WORK' })),
         });
-        // Correctly map existing images to ImageProp structure
         setImages(orderData.orderImages?.map((img: { id: number }) => ({
           id: img.id,
           url: `/api/orders/${orderId}/images/${img.id}`,
@@ -65,7 +69,7 @@ export default function EditOrderPage() {
 
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'An unknown error occurred');
-        router.push('/orders'); // Redirect if order can't be loaded
+        router.push('/orders');
       } finally {
         setLoading(false);
       }
@@ -74,12 +78,12 @@ export default function EditOrderPage() {
     fetchOrderAndEmployees();
   }, [orderId, router]);
   
-  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', quantity: 1, price: 0 }] }));
+  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', quantity: 1, price: 0, workType: 'SIMPLE_WORK' }] }));
   const removeItem = (index: number) => setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
   const updateItem = (index: number, field: keyof OrderItem, value: any) => {
     const newItems = formData.items.map((item, i) => {
         if (i === index) {
-            return { ...item, [field]: field === 'description' ? value : Number(value) || 0 };
+            return { ...item, [field]: field === 'description' || field === 'workType' ? value : Number(value) || 0 };
         }
         return item;
     });
@@ -98,7 +102,6 @@ export default function EditOrderPage() {
     
     try {
         const formDataToSubmit = new FormData();
-        
         const newImageFiles = images.filter(img => img.file);
         const existingImageIds = images.filter(img => img.id).map(img => img.id);
 
@@ -123,7 +126,7 @@ export default function EditOrderPage() {
         if (response.ok) {
             toast.success('Order updated successfully!');
             router.push(`/orders/${orderId}`);
-            router.refresh(); // Important to reflect changes
+            router.refresh();
         } else {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to update order');
@@ -167,7 +170,6 @@ export default function EditOrderPage() {
                         <ImageUpload
                           images={images}
                           onImagesChange={setImages}
-                          // --- Updated Value ---
                           maxFiles={25}
                         />
                     </div>
@@ -181,10 +183,26 @@ export default function EditOrderPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {formData.items.map((item, index) => (
-                        <div key={item.id || index} className="flex gap-4 items-end">
+                        <div key={item.id || index} className="flex flex-col sm:flex-row gap-4 items-end">
                             <div className="flex-grow space-y-1"><Label>Description</Label><Input value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} /></div>
-                            <div className="w-24 space-y-1"><Label>Quantity</Label><Input type="number" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} min="1" /></div>
-                            <div className="w-32 space-y-1"><Label>Price</Label><Input type="number" value={item.price} onChange={(e) => updateItem(index, 'price', e.target.value)} min="0" /></div>
+                            <div className="w-full sm:w-24 space-y-1"><Label>Quantity</Label><Input type="number" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} min="1" /></div>
+                            <div className="w-full sm:w-32 space-y-1"><Label>Price</Label><Input type="number" value={item.price} onChange={(e) => updateItem(index, 'price', e.target.value)} min="0" /></div>
+                            <div className="w-full sm:w-48 space-y-1">
+                                <Label>Work</Label>
+                                <Select
+                                    value={item.workType}
+                                    onValueChange={(value) => updateItem(index, 'workType', value)}
+                                >
+                                    <SelectTrigger>
+                                    <SelectValue placeholder="Select work type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                    <SelectItem value="SIMPLE_WORK">Simple Work</SelectItem>
+                                    <SelectItem value="HAND_WORK">Hand Work</SelectItem>
+                                    <SelectItem value="MACHINE_WORK">Machine Work</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <Button type="button" variant="destructive" onClick={() => removeItem(index)}>Remove</Button>
                         </div>
                     ))}
