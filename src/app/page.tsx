@@ -116,7 +116,8 @@ export default function DashboardPage() {
           <TabsTrigger value="employee_payments">Employee Payments</TabsTrigger>
         </TabsList>
         <TabsContent value="orders">
-          <Tabs defaultValue="all_pending" className="w-full pt-4">
+          {/* due in 1 day set as default */}
+          <Tabs defaultValue="due_1_day" className="w-full pt-4">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
               <TabsTrigger value="due_1_day">
                 Due Today ({ordersLoading ? '...' : ordersData?.dueIn1Day.length})
