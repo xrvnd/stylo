@@ -36,9 +36,10 @@ model Order {
   totalAmount   Int
   advanceAmount Int         @default(0)
   notes         String?
+  // refactored to OrderItems: notesStatus   String      @default("NOT_DONE")
   orderItems    OrderItem[]
   orderImages   OrderImage[]
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
 
@@ -48,7 +49,10 @@ model OrderItem {
   orderId     Int
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   description String
-  workType    String   @default("SIMPLE_WORK") //stores typeof work
+  workType    String   @default("SIMPLE_WORK")
+  itemNotes   String?
+  itemStatus  String   @default("NOT_DONE") // Values: "NOT_DONE", "DONE"
+
   quantity    Int
   price       Int
   createdAt   DateTime @default(now())

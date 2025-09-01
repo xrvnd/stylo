@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload, ImageProp } from '@/components/ui/image-upload'
 import { toast } from 'sonner'
+import { Switch } from '@/components/ui/switch'
 
 type OrderItem = {
   id?: number;
@@ -17,6 +18,8 @@ type OrderItem = {
   quantity: number;
   price: number;
   workType: string;
+  itemNotes: string;
+  itemStatus: boolean;
 }
 type Employee = { id: number; name: string }
 
@@ -39,18 +42,12 @@ export default function EditOrderPage() {
 
   useEffect(() => {
     if (isNaN(orderId)) return;
-
     const fetchOrderAndEmployees = async () => {
       setLoading(true);
       try {
-        const [orderRes, employeesRes] = await Promise.all([
-          fetch(`/api/orders/${orderId}`),
-          fetch('/api/employees'),
-        ]);
-
+        const [orderRes, employeesRes] = await Promise.all([ fetch(`/api/orders/${orderId}`), fetch('/api/employees') ]);
         if (!orderRes.ok) throw new Error('Failed to fetch order data');
         if (!employeesRes.ok) throw new Error('Failed to fetch employees');
-
         const orderData = await orderRes.json();
         const employeesList = await employeesRes.json();
         
@@ -60,13 +57,13 @@ export default function EditOrderPage() {
           notes: orderData.notes || '',
           dueDate: orderData.dueDate ? new Date(orderData.dueDate).toISOString().split('T')[0] : '',
           advancePaid: orderData.advanceAmount || 0,
-          items: orderData.orderItems.map((item: any) => ({ ...item, workType: item.workType || 'SIMPLE_WORK' })),
+          items: orderData.orderItems.map((item: any) => ({
+            ...item,
+            itemNotes: item.itemNotes || '',
+            itemStatus: item.itemStatus === 'DONE',
+          })),
         });
-        setImages(orderData.orderImages?.map((img: { id: number }) => ({
-          id: img.id,
-          url: `/api/orders/${orderId}/images/${img.id}`,
-        })) || []);
-
+        setImages(orderData.orderImages?.map((img: { id: number }) => ({ id: img.id, url: `/api/orders/${orderId}/images/${img.id}` })) || []);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'An unknown error occurred');
         router.push('/orders');
@@ -74,24 +71,20 @@ export default function EditOrderPage() {
         setLoading(false);
       }
     };
-    
     fetchOrderAndEmployees();
   }, [orderId, router]);
   
-  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', quantity: 1, price: 0, workType: 'SIMPLE_WORK' }] }));
+  const addItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { description: '', quantity: 1, price: 0, workType: 'SIMPLE_WORK', itemNotes: '', itemStatus: false }] }));
   const removeItem = (index: number) => setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
   const updateItem = (index: number, field: keyof OrderItem, value: any) => {
     const newItems = formData.items.map((item, i) => {
-        if (i === index) {
-            return { ...item, [field]: field === 'description' || field === 'workType' ? value : Number(value) || 0 };
-        }
+        if (i === index) { return { ...item, [field]: value }; }
         return item;
     });
     setFormData(prev => ({ ...prev, items: newItems }));
   };
-
   const { totalAmount, remainingDue } = useMemo(() => {
-    const total = formData.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    const total = formData.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.price)), 0);
     const remaining = total - formData.advancePaid;
     return { totalAmount: total, remainingDue: remaining };
   }, [formData.items, formData.advancePaid]);
@@ -104,10 +97,7 @@ export default function EditOrderPage() {
         const formDataToSubmit = new FormData();
         const newImageFiles = images.filter(img => img.file);
         const existingImageIds = images.filter(img => img.id).map(img => img.id);
-
-        newImageFiles.forEach(img => {
-            if (img.file) formDataToSubmit.append('images', img.file);
-        });
+        newImageFiles.forEach(img => { if (img.file) formDataToSubmit.append('images', img.file); });
         formDataToSubmit.append('imageIds', JSON.stringify(existingImageIds));
 
         formDataToSubmit.append('data', JSON.stringify({
@@ -115,13 +105,15 @@ export default function EditOrderPage() {
             notes: formData.notes,
             dueDate: formData.dueDate,
             advancePaid: formData.advancePaid,
-            items: formData.items,
+            items: formData.items.map(item => ({
+              ...item,
+              price: Number(item.price) || 0,
+              quantity: Number(item.quantity) || 1,
+              itemStatus: item.itemStatus ? 'DONE' : 'NOT_DONE',
+            })),
         }));
 
-        const response = await fetch(`/api/orders/${orderId}`, {
-            method: 'PUT',
-            body: formDataToSubmit,
-        });
+        const response = await fetch(`/api/orders/${orderId}`, { method: 'PUT', body: formDataToSubmit });
 
         if (response.ok) {
             toast.success('Order updated successfully!');
@@ -149,61 +141,34 @@ export default function EditOrderPage() {
                 <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="employee">Employee</Label>
-                            <Select value={formData.employeeId} onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value }))}>
-                                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                                <SelectContent>{employees.map((employee) => (<SelectItem key={employee.id} value={employee.id.toString()}>{employee.name}</SelectItem>))}</SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="dueDate">Due Date</Label>
-                            <Input id="dueDate" type="date" value={formData.dueDate} onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))} />
-                        </div>
+                        <div className="space-y-2"><Label htmlFor="employee">Employee</Label><Select value={formData.employeeId} onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value }))}><SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger><SelectContent>{employees.map((employee) => (<SelectItem key={employee.id} value={employee.id.toString()}>{employee.name}</SelectItem>))}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label htmlFor="dueDate">Due Date</Label><Input id="dueDate" type="date" value={formData.dueDate} onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))} /></div>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="notes">Notes</Label>
-                        <Textarea id="notes" value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} placeholder="Add any notes here..." />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Images</Label>
-                        <ImageUpload
-                          images={images}
-                          onImagesChange={setImages}
-                          maxFiles={25}
-                        />
-                    </div>
+                    <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} placeholder="Add any notes here..." /></div>
+                    <div className="space-y-2"><Label>Images</Label><ImageUpload images={images} onImagesChange={setImages} maxFiles={25}/></div>
                 </CardContent>
             </Card>
-
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Order Items</CardTitle>
-                    <Button type="button" variant="outline" onClick={addItem}>Add Item</Button>
-                </CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Order Items</CardTitle><Button type="button" variant="outline" onClick={addItem}>Add Item</Button></CardHeader>
                 <CardContent className="space-y-4">
                     {formData.items.map((item, index) => (
-                        <div key={item.id || index} className="flex flex-col sm:flex-row gap-4 items-end">
-                            <div className="flex-grow space-y-1"><Label>Description</Label><Input value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} /></div>
-                            <div className="w-full sm:w-24 space-y-1"><Label>Quantity</Label><Input type="number" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} min="1" /></div>
-                            <div className="w-full sm:w-32 space-y-1"><Label>Price</Label><Input type="number" value={item.price} onChange={(e) => updateItem(index, 'price', e.target.value)} min="0" /></div>
-                            <div className="w-full sm:w-48 space-y-1">
-                                <Label>Work</Label>
-                                <Select
-                                    value={item.workType}
-                                    onValueChange={(value) => updateItem(index, 'workType', value)}
-                                >
-                                    <SelectTrigger>
-                                    <SelectValue placeholder="Select work type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                    <SelectItem value="SIMPLE_WORK">Simple Work</SelectItem>
-                                    <SelectItem value="HAND_WORK">Hand Work</SelectItem>
-                                    <SelectItem value="MACHINE_WORK">Machine Work</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                        <div key={item.id || index} className="p-4 border rounded-lg space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-4 items-end">
+                                <div className="flex-grow space-y-1"><Label>Description</Label><Input value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} required /></div>
+                                <div className="w-full sm:w-24 space-y-1"><Label>Quantity</Label><Input type="number" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} min="1" required/></div>
+                                <div className="w-full sm:w-32 space-y-1"><Label>Price</Label><Input type="number" value={item.price} onChange={(e) => updateItem(index, 'price', e.target.value)} min="0" required/></div>
+                                <div className="w-full sm:w-48 space-y-1"><Label>Work</Label><Select value={item.workType} onValueChange={(value) => updateItem(index, 'workType', value)}><SelectTrigger><SelectValue placeholder="Select work type" /></SelectTrigger><SelectContent><SelectItem value="SIMPLE_WORK">Simple Work</SelectItem><SelectItem value="HAND_WORK">Hand Work</SelectItem><SelectItem value="MACHINE_WORK">Machine Work</SelectItem></SelectContent></Select></div>
                             </div>
-                            <Button type="button" variant="destructive" onClick={() => removeItem(index)}>Remove</Button>
+                            <div className="flex items-end gap-4">
+                                <div className="flex-grow space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <Label>Item Notes</Label>
+                                        <div className="flex items-center space-x-2"><Switch id={`itemStatus-${index}`} checked={item.itemStatus} onCheckedChange={(checked) => updateItem(index, 'itemStatus', checked)} /><Label htmlFor={`itemStatus-${index}`}>{item.itemStatus ? "Done" : "Not Done"}</Label></div>
+                                    </div>
+                                    <Textarea value={item.itemNotes} onChange={(e) => updateItem(index, 'itemNotes', e.target.value)} placeholder="Add specific notes for this item..." rows={2}/>
+                                </div>
+                                <Button type="button" variant="destructive" onClick={() => removeItem(index)}>Remove</Button>
+                            </div>
                         </div>
                     ))}
                 </CardContent>
@@ -215,11 +180,7 @@ export default function EditOrderPage() {
                     </div>
                 </CardFooter>
             </Card>
-            
-            <div className="flex justify-end space-x-4">
-                <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>Cancel</Button>
-                <Button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</Button>
-            </div>
+            <div className="flex justify-end space-x-4"><Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>Cancel</Button><Button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</Button></div>
         </form>
     </div>
   )
