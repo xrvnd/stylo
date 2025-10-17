@@ -13,6 +13,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 import { customerSchema } from '@/lib/validations/schema'
 
@@ -25,7 +32,8 @@ export default function NewCustomerPage() {
     nickname: '',
     email: '',
     phone: '',
-    address: ''
+    address: '',
+    paperCutting: false
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -35,6 +43,17 @@ export default function NewCustomerPage() {
       [name]: value
     }))
     // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }))
+    }
+  }
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value === 'true'
+    }))
+    // Clear error when user makes selection
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }))
     }
@@ -201,6 +220,25 @@ export default function NewCustomerPage() {
                 />
                 {errors.address && (
                   <p className="text-sm text-red-500">{errors.address}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="paperCutting">Paper Cutting</Label>
+                <Select
+                  value={formData.paperCutting.toString()}
+                  onValueChange={(value) => handleSelectChange('paperCutting', value)}
+                >
+                  <SelectTrigger className={errors.paperCutting ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Select paper cutting option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">No</SelectItem>
+                    <SelectItem value="true">Yes</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.paperCutting && (
+                  <p className="text-sm text-red-500">{errors.paperCutting}</p>
                 )}
               </div>
             </CardContent>

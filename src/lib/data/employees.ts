@@ -13,7 +13,7 @@ export function getEmployees() {
       name: 'asc'
     }
   }).catch(error => {
-    console.error('Error fetching employees:', error)
+    console.error('Error fetching employees:', error instanceof Error ? error.message : String(error))
     throw error
   })
 }
@@ -38,7 +38,7 @@ export function getEmployeeById(id: number) {
       }
     }
   }).catch(error => {
-    console.error('Error fetching employee:', error)
+    console.error('Error fetching employee:', error instanceof Error ? error.message : String(error))
     throw error
   })
 }

@@ -14,6 +14,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 
 export default function EditCustomerPage({
@@ -29,7 +36,8 @@ export default function EditCustomerPage({
     nickname: '',
     email: '',
     phone: '',
-    address: ''
+    address: '',
+    paperCutting: false
   })
 
   useEffect(() => {
@@ -43,7 +51,8 @@ export default function EditCustomerPage({
             nickname: customer.nickname || '',
             email: customer.email || '',
             phone: customer.phone,
-            address: customer.address || ''
+            address: customer.address || '',
+            paperCutting: customer.paperCutting || false
           })
         } else {
           throw new Error('Failed to fetch customer')
@@ -63,6 +72,13 @@ export default function EditCustomerPage({
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }))
+  }
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value === 'true'
     }))
   }
 
@@ -164,6 +180,22 @@ export default function EditCustomerPage({
                   placeholder="Enter address"
                   rows={3}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="paperCutting">Paper Cutting</Label>
+                <Select
+                  value={formData.paperCutting.toString()}
+                  onValueChange={(value) => handleSelectChange('paperCutting', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select paper cutting option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">No</SelectItem>
+                    <SelectItem value="true">Yes</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
             <CardFooter className="flex justify-end space-x-4">

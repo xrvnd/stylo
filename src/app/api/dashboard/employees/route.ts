@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json(employeeTotals);
 
   } catch (error) {
-    console.error('Failed to fetch employee dashboard data:', error);
+    console.error('Failed to fetch employee dashboard data:', error instanceof Error ? error.message : String(error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

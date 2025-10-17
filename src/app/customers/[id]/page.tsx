@@ -81,6 +81,18 @@ export default function CustomerPage({
                 <dt className="text-sm font-medium text-gray-500">Address</dt>
                 <dd className="mt-1">{customer.address || '-'}</dd>
               </div>
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Paper Cutting</dt>
+                <dd className="mt-1">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    customer.paperCutting 
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {customer.paperCutting ? 'Yes' : 'No'}
+                  </span>
+                </dd>
+              </div>
             </dl>
           </CardContent>
         </Card>

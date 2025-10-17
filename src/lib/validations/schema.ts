@@ -6,7 +6,8 @@ export const customerSchema = z.object({
   nickname: z.string().optional().nullable(),
   email: z.string().email('Invalid email').optional().nullable(),
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
-  address: z.string().optional().nullable()
+  address: z.string().optional().nullable(),
+  paperCutting: z.boolean().default(false)
 })
 
 // Order schemas

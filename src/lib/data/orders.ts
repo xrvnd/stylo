@@ -162,7 +162,7 @@ export async function getEmployees() {
       },
     })
   } catch (error) {
-    console.error('Error fetching employees:', error)
+    console.error('Error fetching employees:', error instanceof Error ? error.message : String(error))
     throw error
   }
 }

@@ -72,7 +72,7 @@ export async function GET() {
       allPending,
     });
   } catch (error) {
-    console.error('Failed to fetch dashboard data:', error);
+    console.error('Failed to fetch dashboard data:', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: 'Failed to fetch dashboard data' },
       { status: 500 }

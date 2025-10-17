@@ -16,7 +16,7 @@ export async function getCustomers() {
     })
     return customers
   } catch (error) {
-    console.error('Error fetching customers:', error)
+    console.error('Error fetching customers:', error instanceof Error ? error.message : String(error))
     throw error
   }
 }

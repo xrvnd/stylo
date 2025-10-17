@@ -11,15 +11,16 @@ datasource db {
 }
 
 model Customer {
-  id        Int      @id @default(autoincrement())
-  name      String
-  nickname  String?
-  email     String?  @unique
-  phone     String
-  address   String?
-  orders    Order[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  name         String
+  nickname     String?
+  email        String?  @unique
+  phone        String
+  address      String?
+  paperCutting Boolean  @default(false)
+  orders       Order[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Order {

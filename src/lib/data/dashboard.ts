@@ -25,7 +25,7 @@ export async function getDashboardData() {
       recentOrders
     }
   } catch (error) {
-    console.error('Error fetching dashboard data:', error)
+    console.error('Error fetching dashboard data:', error instanceof Error ? error.message : String(error))
     // Return default values if database is empty or there's an error
     return {
       totalOrders: 0,
