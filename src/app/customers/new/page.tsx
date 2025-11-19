@@ -22,11 +22,14 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { customerSchema } from '@/lib/validations/schema'
+import { Upload, X, ImageIcon } from 'lucide-react'
 
 export default function NewCustomerPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  
+  // Text Form Data
   const [formData, setFormData] = useState({
     name: '',
     nickname: '',
@@ -36,28 +39,53 @@ export default function NewCustomerPage() {
     paperCutting: false
   })
 
+  // Image Upload State
+  const [selectedImages, setSelectedImages] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }))
-    }
+    setFormData(prev => ({ ...prev, [name]: value }))
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }))
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: value === 'true'
-    }))
-    // Clear error when user makes selection
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }))
-    }
+    setFormData(prev => ({ ...prev, [name]: value === 'true' }))
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }))
   }
+
+  // --- Image Handling Functions ---
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newFiles = Array.from(files)
+    const totalImages = selectedImages.length + newFiles.length
+
+    if (totalImages > 6) {
+      toast.error('You can only add up to 6 images')
+      return
+    }
+
+    // Create previews
+    const newPreviews = newFiles.map(file => URL.createObjectURL(file))
+
+    setSelectedImages(prev => [...prev, ...newFiles])
+    setImagePreviews(prev => [...prev, ...newPreviews])
+    
+    // Reset input so same file can be selected again if needed
+    e.target.value = ''
+  }
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index))
+    setImagePreviews(prev => {
+      // Revoke URL to prevent memory leaks
+      URL.revokeObjectURL(prev[index])
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+  // -------------------------------
 
   const validateForm = () => {
     try {
@@ -70,7 +98,7 @@ export default function NewCustomerPage() {
       customerSchema.parse(cleanedData)
       setErrors({})
       return true
-    } catch (error) {
+    } catch (error: any) {
       const newErrors: Record<string, string> = {}
       error.errors.forEach((err: { path: string[]; message: string }) => {
         newErrors[err.path[0]] = err.message
@@ -83,17 +111,12 @@ export default function NewCustomerPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Client-side validation
     if (!validateForm()) {
-      // Show the first error as a toast
       const firstError = Object.values(errors)[0]
-      if (firstError) {
-        toast.error(firstError)
-      }
+      if (firstError) toast.error(firstError)
       return
     }
 
-    // Convert empty strings to null for optional fields
     const cleanedData = {
       ...formData,
       nickname: formData.nickname || null,
@@ -103,30 +126,46 @@ export default function NewCustomerPage() {
 
     try {
       setLoading(true)
+      
+      // 1. Create Customer
       const response = await fetch('/api/customers', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanedData),
       })
 
       const data = await response.json()
 
-      if (response.ok) {
-        toast.success('Customer added successfully')
-        router.push('/customers')
-      } else {
-        if (data.details) {
-          const errorMessage = data.details
-            .map((err: { field: string; message: string }) => `${err.field}: ${err.message}`)
-            .join(', ')
-          throw new Error(errorMessage)
-        } else {
-          throw new Error(data.error || 'Failed to add customer')
-        }
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add customer')
       }
-    } catch (error) {
+
+      const newCustomerId = data.id
+
+      // 2. Upload Images (if any)
+      if (selectedImages.length > 0) {
+        try {
+          // Upload images one by one
+          await Promise.all(selectedImages.map(file => {
+            const imageFormData = new FormData()
+            imageFormData.append('image', file)
+            return fetch(`/api/customers/${newCustomerId}/images`, {
+              method: 'POST',
+              body: imageFormData
+            })
+          }))
+          toast.success('Customer and images added successfully')
+        } catch (imgError) {
+          console.error('Image upload error:', imgError)
+          toast.warning('Customer added, but some images failed to upload')
+        }
+      } else {
+        toast.success('Customer added successfully')
+      }
+
+      router.push('/customers')
+
+    } catch (error: any) {
       console.error('Error adding customer:', error)
       toast.error(error.message || 'Error adding customer')
     } finally {
@@ -145,6 +184,7 @@ export default function NewCustomerPage() {
               <CardTitle>Customer Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* --- Existing Fields --- */}
               <div className="space-y-2">
                 <Label htmlFor="name">Name *</Label>
                 <Input
@@ -156,9 +196,7 @@ export default function NewCustomerPage() {
                   required
                   className={errors.name ? 'border-red-500' : ''}
                 />
-                {errors.name && (
-                  <p className="text-sm text-red-500">{errors.name}</p>
-                )}
+                {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
               </div>
 
               <div className="space-y-2">
@@ -169,11 +207,7 @@ export default function NewCustomerPage() {
                   value={formData.nickname}
                   onChange={handleChange}
                   placeholder="Enter nickname (optional)"
-                  className={errors.nickname ? 'border-red-500' : ''}
                 />
-                {errors.nickname && (
-                  <p className="text-sm text-red-500">{errors.nickname}</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -185,11 +219,7 @@ export default function NewCustomerPage() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Enter email (optional)"
-                  className={errors.email ? 'border-red-500' : ''}
                 />
-                {errors.email && (
-                  <p className="text-sm text-red-500">{errors.email}</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -203,9 +233,7 @@ export default function NewCustomerPage() {
                   required
                   className={errors.phone ? 'border-red-500' : ''}
                 />
-                {errors.phone && (
-                  <p className="text-sm text-red-500">{errors.phone}</p>
-                )}
+                {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
               </div>
 
               <div className="space-y-2">
@@ -216,11 +244,7 @@ export default function NewCustomerPage() {
                   value={formData.address}
                   onChange={handleChange}
                   placeholder="Enter address (optional)"
-                  className={errors.address ? 'border-red-500' : ''}
                 />
-                {errors.address && (
-                  <p className="text-sm text-red-500">{errors.address}</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -229,7 +253,7 @@ export default function NewCustomerPage() {
                   value={formData.paperCutting.toString()}
                   onValueChange={(value) => handleSelectChange('paperCutting', value)}
                 >
-                  <SelectTrigger className={errors.paperCutting ? 'border-red-500' : ''}>
+                  <SelectTrigger>
                     <SelectValue placeholder="Select paper cutting option" />
                   </SelectTrigger>
                   <SelectContent>
@@ -237,14 +261,64 @@ export default function NewCustomerPage() {
                     <SelectItem value="true">Yes</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.paperCutting && (
-                  <p className="text-sm text-red-500">{errors.paperCutting}</p>
+              </div>
+
+              {/* --- NEW: Image Upload Section --- */}
+              <div className="space-y-2 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <Label>Reference Images ({selectedImages.length}/6)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('image-upload')?.click()}
+                    disabled={selectedImages.length >= 6}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Select Images
+                  </Button>
+                  <input
+                    id="image-upload"
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageSelect}
+                  />
+                </div>
+
+                {/* Image Grid */}
+                {selectedImages.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-4 mt-4">
+                    {imagePreviews.map((src, index) => (
+                      <div key={index} className="relative aspect-square group border rounded-lg overflow-hidden bg-gray-50">
+                        <img
+                          src={src}
+                          alt={`Preview ${index}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-1 right-1 p-1 bg-white/80 rounded-full hover:bg-red-100 text-gray-600 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-6 border-2 border-dashed rounded-lg bg-gray-50/50">
+                    <ImageIcon className="h-8 w-8 text-gray-300 mb-2" />
+                    <p className="text-xs text-gray-400">No images selected</p>
+                  </div>
                 )}
               </div>
+
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Adding...' : 'Add Customer'}
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? 'Creating Customer...' : 'Create Customer'}
               </Button>
             </CardFooter>
           </Card>

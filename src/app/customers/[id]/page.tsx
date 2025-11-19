@@ -18,6 +18,8 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { notFound } from 'next/navigation'
 import { use } from 'react'
+// ADD THIS IMPORT
+import { CustomerImageGallery } from '@/components/customers/customer-image-gallery'
 
 export default function CustomerPage({
   params,
@@ -25,15 +27,16 @@ export default function CustomerPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const customer = use(getCustomerById(parseInt(id)))
+  const customerIdInt = parseInt(id)
+  const customer = use(getCustomerById(customerIdInt))
 
   if (!customer) {
     notFound()
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-6 space-y-6"> {/* Added space-y-6 for consistent vertical spacing */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">{customer.name}</h1>
           {customer.nickname && (
@@ -45,15 +48,12 @@ export default function CustomerPage({
             <Link href={`/customers/${customer.id}/edit`}>Edit Customer</Link>
           </Button>
           <Button asChild>
-            {/* --- MODIFICATION START --- */}
-            {/* We now pass the customer's ID in the URL */}
             <Link href={`/orders/new?customerId=${customer.id}`}>Create Order</Link>
-            {/* --- MODIFICATION END --- */}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Contact Information</CardTitle>
@@ -134,6 +134,11 @@ export default function CustomerPage({
             </dl>
           </CardContent>
         </Card>
+      </div>
+
+      {/* images adding here in customers page */}
+      <div className="w-full">
+        <CustomerImageGallery customerId={customer.id} />
       </div>
 
       <Card>

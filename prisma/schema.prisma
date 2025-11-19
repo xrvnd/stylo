@@ -19,6 +19,8 @@ model Customer {
   address      String?
   paperCutting Boolean  @default(false)
   orders       Order[]
+  //adding image to cust model
+  images       CustomerImage[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -91,4 +93,14 @@ model EmployeePayment {
   paymentDate DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// adding customer image functionality
+model CustomerImage {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  image      Bytes
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
